@@ -1,0 +1,36 @@
+# Resource pool definitions for Infrahub Resource Manager
+# Used by populate_sot.py with --with-pools flag
+#
+# Pool types:
+#   - CoreIPPrefixPool: Allocates IP prefixes from a parent prefix
+#   - CoreIPAddressPool: Allocates individual IP addresses from a prefix
+#   - CoreNumberPool: Allocates sequential numbers from a range
+#
+# Pools reference parent prefixes that must exist in IpamPrefix before pool creation.
+---
+
+ip_prefix_pools:
+  - name: "fabric-underlay"
+    description: "Fabric underlay point-to-point /31 links"
+    default_prefix_length: 31
+    resources:
+      - prefix: "10.0.0.0/16"
+
+  - name: "loopback-pool"
+    description: "Loopback /32 addresses for router-id"
+    default_prefix_length: 32
+    resources:
+      - prefix: "10.1.0.0/24"
+
+ip_address_pools:
+  - name: "loopback-addresses"
+    description: "Individual loopback IPs allocated from loopback prefix pool"
+    default_prefix_length: 32
+    resources:
+      - pool: "loopback-pool"
+
+number_pools:
+  - name: "asn-pool"
+    description: "Private ASN allocation (4-byte range)"
+    start_range: 65000
+    end_range: 65534

@@ -1,0 +1,26 @@
+query AllIPAddresses {
+    IpamIPAddress {
+        edges {
+            node {
+                id
+                address { value }
+                description { value }
+                ip_namespace {
+                    node {
+                        name { value }
+                    }
+                }
+                interface {
+                    node {
+                        name { value }
+                        device {
+                            node {
+                                name { value }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

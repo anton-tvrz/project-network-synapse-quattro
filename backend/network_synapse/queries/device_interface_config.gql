@@ -1,0 +1,28 @@
+query DeviceInterfaceConfig($hostname: String!) {
+    DcimDevice(name__value: $hostname) {
+        edges {
+            node {
+                id
+                name { value }
+            }
+        }
+    }
+    InterfacePhysical(device__name__value: $hostname) {
+        edges {
+            node {
+                id
+                name { value }
+                description { value }
+                mtu { value }
+                role { value }
+                ip_addresses {
+                    edges {
+                        node {
+                            address { value }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

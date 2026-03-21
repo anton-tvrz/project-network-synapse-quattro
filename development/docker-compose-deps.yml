@@ -1,0 +1,121 @@
+# Infrastructure dependencies only — no app containers
+# Usage: docker compose -f development/docker-compose-deps.yml up -d
+# Or: uv run invoke dev.deps
+
+services:
+  # ---------------------------------------------------------------------------
+  # Infrahub stack
+  # ---------------------------------------------------------------------------
+  infrahub-database:
+    image: neo4j:5-community
+    environment:
+      NEO4J_AUTH: neo4j/infrahub
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_security_procedures_unrestricted: "apoc.*"
+    ports:
+      - "${NEO4J_PORT:-7687}:7687"
+      - "${NEO4J_HTTP_PORT:-7474}:7474"
+    volumes:
+      - neo4j_data:/data
+
+  infrahub-cache:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+
+  infrahub-message-queue:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MGMT_PORT:-15672}:15672"
+
+  infrahub-server:
+    image: registry.opsmill.io/opsmill/infrahub:stable
+    depends_on:
+      - infrahub-database
+      - infrahub-cache
+      - infrahub-message-queue
+    environment:
+      INFRAHUB_DB_TYPE: neo4j
+      INFRAHUB_DB_ADDRESS: infrahub-database
+      INFRAHUB_DB_PORT: 7687
+      INFRAHUB_DB_USERNAME: neo4j
+      INFRAHUB_DB_PASSWORD: infrahub
+      INFRAHUB_CACHE_ADDRESS: infrahub-cache
+      INFRAHUB_CACHE_PORT: 6379
+      INFRAHUB_BROKER_ADDRESS: infrahub-message-queue
+      INFRAHUB_BROKER_PORT: 5672
+    ports:
+      - "${INFRAHUB_PORT:-8000}:8000"
+
+  # ---------------------------------------------------------------------------
+  # Temporal stack
+  # ---------------------------------------------------------------------------
+  temporal:
+    image: temporalio/auto-setup:latest
+    environment:
+      DB: sqlite
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
+    ports:
+      - "${TEMPORAL_PORT:-7233}:7233"
+    volumes:
+      - temporal_data:/var/lib/temporal
+
+  temporal-ui:
+    image: temporalio/ui:latest
+    depends_on:
+      - temporal
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+    ports:
+      - "${TEMPORAL_UI_PORT:-8080}:8080"
+
+  # ---------------------------------------------------------------------------
+  # Telemetry & Observability stack
+  # ---------------------------------------------------------------------------
+  suzieq:
+    image: netenglabs/suzieq:latest
+    container_name: suzieq
+    ports:
+      - "8530:8530" # Suzieq REST API
+      - "8531:8531" # Suzieq GUI
+    volumes:
+      - ./suzieq/suzieq-inventory.yml:/suzieq/suzieq-inventory.yml:ro
+      - suzieq_parquet:/suzieq/parquet
+    command: "sq-poller -I /suzieq/suzieq-inventory.yml"
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=15d"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    depends_on:
+      - prometheus
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: synapse
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/network-operations.json
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+
+volumes:
+  neo4j_data:
+  temporal_data:
+  suzieq_parquet:
+  prometheus_data:
+  grafana_data:

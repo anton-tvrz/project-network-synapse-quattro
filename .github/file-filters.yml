@@ -1,0 +1,47 @@
+# Path-based file filters for CI conditional job execution
+# Used by dorny/paths-filter in GitHub Actions workflows
+
+backend:
+  - "backend/**"
+  - "tests/**"
+  - "pyproject.toml"
+  - "uv.lock"
+
+workers:
+  - "workers/**"
+  - "tests/**"
+  - "pyproject.toml"
+  - "uv.lock"
+
+python:
+  - "**/*.py"
+  - "pyproject.toml"
+  - "uv.lock"
+
+documentation:
+  - "docs/**"
+  - "dev/**"
+  - "*.md"
+
+ci:
+  - ".github/**"
+  - ".pre-commit-config.yaml"
+
+infrastructure:
+  - "development/**"
+  - "containerlab/**"
+  - "ansible/**"
+  - "docker-compose*.yml"
+
+yaml:
+  - "**/*.yml"
+  - "**/*.yaml"
+  - ".yamllint.yml"
+
+schemas:
+  - "backend/network_synapse/schemas/**"
+  - "library/**"
+
+templates:
+  - "backend/network_synapse/templates/**"
+  - "**/*.j2"

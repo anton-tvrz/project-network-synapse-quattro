@@ -1,0 +1,32 @@
+{# Nokia SR Linux BGP configuration template — renders JSON structured data #}
+{# Applied via gNMI SET to /network-instance[name={{ network_instance }}]/protocols/bgp #}
+{
+    "network-instance": [
+        {
+            "name": "{{ network_instance | default('default') }}",
+            "protocols": {
+                "bgp": {
+                    "autonomous-system": {{ local_asn }},
+                    "router-id": "{{ router_id }}",
+                    "group": [
+                        {
+                            "group-name": "{{ group_name | default('underlay') }}",
+                            "export-policy": "{{ export_policy | default('export-all') }}",
+                            "import-policy": "{{ import_policy | default('import-all') }}"
+                        }
+                    ],
+                    "neighbor": [
+{% for session in bgp_sessions %}
+                        {
+                            "peer-address": "{{ session.remote_ip }}",
+                            "peer-as": {{ session.remote_asn }},
+                            "peer-group": "{{ session.group | default('underlay') }}",
+                            "description": "{{ session.description | default('') }}"
+                        }{{ "," if not loop.last else "" }}
+{% endfor %}
+                    ]
+                }
+            }
+        }
+    ]
+}

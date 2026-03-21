@@ -1,0 +1,20 @@
+# markdownlint-cli2 configuration
+# https://github.com/DavidAnson/markdownlint-cli2
+
+config:
+  # Disable line length — long lines are common in docs with URLs
+  MD013: false
+  # Allow duplicate headings in sibling sections
+  MD024:
+    siblings_only: true
+  # Allow inline HTML (needed for badges, collapsible sections)
+  MD033: false
+  # Allow bare URLs
+  MD034: false
+
+ignores:
+  - ".venv/**"
+  - "library/**"
+  - "node_modules/**"
+  - "changelog/**"
+  - "CHANGELOG.md"

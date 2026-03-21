@@ -1,0 +1,57 @@
+# Filebeat Configuration — Ship logs to Elasticsearch
+
+filebeat.inputs:
+  # Python application logs (structured JSON)
+  - type: filestream
+    id: synapse-worker
+    paths:
+      - /var/log/synapse-worker/*.log
+    parsers:
+      - ndjson:
+          keys_under_root: true
+          add_error_key: true
+
+  # Temporal server logs
+  - type: filestream
+    id: temporal
+    paths:
+      - /var/log/temporal/*.log
+    parsers:
+      - ndjson:
+          keys_under_root: true
+
+  # Infrahub logs
+  - type: filestream
+    id: infrahub
+    paths:
+      - /var/log/infrahub/*.log
+
+processors:
+  - add_docker_metadata: ~
+  - add_host_metadata: ~
+
+output.elasticsearch:
+  hosts: ["${ELASTICSEARCH_HOST:-elasticsearch:9200}"]
+  indices:
+    - index: "synapse-worker-%{+yyyy.MM.dd}"
+      when.contains:
+        fields.source: "synapse-worker"
+    - index: "temporal-%{+yyyy.MM.dd}"
+      when.contains:
+        fields.source: "temporal"
+    - index: "infrahub-%{+yyyy.MM.dd}"
+      when.contains:
+        fields.source: "infrahub"
+
+setup.ilm:
+  enabled: true
+  rollover_alias: "synapse-logs"
+  policy_name: "synapse-30d-retention"
+  pattern: "{now/d}-000001"
+
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: /var/log/filebeat
+  name: filebeat
+  keepfiles: 7

@@ -1,0 +1,33 @@
+query AllBGPSessions {
+    RoutingBGPSession {
+        edges {
+            node {
+                id
+                description { value }
+                session_type { value }
+                role { value }
+                status { value }
+                device {
+                    node {
+                        name { value }
+                    }
+                }
+                local_as {
+                    node { asn { value } }
+                }
+                remote_as {
+                    node { asn { value } }
+                }
+                local_ip {
+                    node { address { value } }
+                }
+                remote_ip {
+                    node { address { value } }
+                }
+                peer_group {
+                    node { name { value } }
+                }
+            }
+        }
+    }
+}

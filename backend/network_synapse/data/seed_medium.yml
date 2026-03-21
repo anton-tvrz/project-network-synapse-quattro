@@ -1,0 +1,226 @@
+# Seed data for Infrahub — Medium topology (enhanced spine-leaf with hosts)
+# Matches containerlab/topologies/medium.clab.yml
+# Nokia SR Linux devices with eBGP underlay
+#
+# Network Design:
+#   - Spine-leaf topology: 1 spine, 2 leaves (+ 2 linux servers, not in Infrahub)
+#   - eBGP underlay: each device has unique ASN
+#   - Fabric links: /31 point-to-point between spine and leaf
+#   - Loopbacks: /32 for router-id
+#   - Management: 172.20.31.0/24 (Containerlab mgmt network)
+---
+
+organization:
+  name: "Synapse Lab"
+  description: "Network Synapse POC/MVP lab environment"
+
+manufacturer:
+  name: "Nokia"
+  description: "Nokia Corporation - SR Linux network operating system"
+
+location:
+  name: "Local Lab"
+  shortname: "local-lab"
+  description: "Local OrbStack Containerlab environment"
+
+platform:
+  name: "Nokia SR Linux"
+  description: "Nokia Service Router Linux (SR Linux)"
+  nornir_platform: "srlinux"
+  napalm_driver: "srl"
+  containerlab_os: "nokia_srlinux"
+  ansible_network_os: "nokia.srlinux.srlinux"
+  netmiko_device_type: "nokia_srl"
+
+device_types:
+  - name: "7220 IXR-D3"
+    description: "Nokia 7220 IXR-D3 - Spine/Aggregation switch"
+    part_number: "7220-IXR-D3"
+  - name: "7220 IXR-D2"
+    description: "Nokia 7220 IXR-D2 - Leaf/Top-of-Rack switch"
+    part_number: "7220-IXR-D2"
+
+autonomous_systems:
+  - name: "Spine AS"
+    asn: 65000
+    description: "Spine tier autonomous system"
+  - name: "Leaf01 AS"
+    asn: 65001
+    description: "Leaf01 autonomous system"
+  - name: "Leaf02 AS"
+    asn: 65002
+    description: "Leaf02 autonomous system"
+
+devices:
+  - name: spine01
+    role: spine
+    status: active
+    device_type: "7220 IXR-D3"
+    management_ip: "172.20.31.10/24"
+    lab_node_name: "clab-medium-lab-spine01"
+    asn: 65000
+    description: "Spine switch - Nokia 7220 IXR-D3"
+
+  - name: leaf01
+    role: leaf
+    status: active
+    device_type: "7220 IXR-D2"
+    management_ip: "172.20.31.20/24"
+    lab_node_name: "clab-medium-lab-leaf01"
+    asn: 65001
+    description: "Leaf switch 01 - Nokia 7220 IXR-D2"
+
+  - name: leaf02
+    role: leaf
+    status: active
+    device_type: "7220 IXR-D2"
+    management_ip: "172.20.31.21/24"
+    lab_node_name: "clab-medium-lab-leaf02"
+    asn: 65002
+    description: "Leaf switch 02 - Nokia 7220 IXR-D2"
+
+# IP addressing plan for fabric underlay
+ip_prefixes:
+  - prefix: "172.20.31.0/24"
+    description: "Containerlab management network (medium-lab)"
+  - prefix: "10.0.0.0/16"
+    description: "Fabric underlay supernet"
+  - prefix: "10.0.0.0/31"
+    description: "spine01:e1-1 <-> leaf01:e1-49"
+  - prefix: "10.0.0.2/31"
+    description: "spine01:e1-2 <-> leaf02:e1-49"
+  - prefix: "10.0.0.4/31"
+    description: "spine01:e1-3 <-> leaf01:e1-50"
+  - prefix: "10.0.0.6/31"
+    description: "spine01:e1-4 <-> leaf02:e1-50"
+  - prefix: "10.1.0.0/24"
+    description: "Loopback supernet"
+
+interfaces:
+  # Spine01 interfaces
+  - device: spine01
+    name: ethernet-1/1
+    description: "to leaf01:ethernet-1/49"
+    role: fabric
+    mtu: 9214
+    ip_address: "10.0.0.0/31"
+  - device: spine01
+    name: ethernet-1/2
+    description: "to leaf02:ethernet-1/49"
+    role: fabric
+    mtu: 9214
+    ip_address: "10.0.0.2/31"
+  - device: spine01
+    name: ethernet-1/3
+    description: "to leaf01:ethernet-1/50"
+    role: fabric
+    mtu: 9214
+    ip_address: "10.0.0.4/31"
+  - device: spine01
+    name: ethernet-1/4
+    description: "to leaf02:ethernet-1/50"
+    role: fabric
+    mtu: 9214
+    ip_address: "10.0.0.6/31"
+  - device: spine01
+    name: loopback0
+    description: "Router ID - spine01"
+    role: loopback
+    ip_address: "10.1.0.1/32"
+
+  # Leaf01 interfaces
+  - device: leaf01
+    name: ethernet-1/49
+    description: "to spine01:ethernet-1/1"
+    role: fabric
+    mtu: 9214
+    ip_address: "10.0.0.1/31"
+  - device: leaf01
+    name: ethernet-1/50
+    description: "to spine01:ethernet-1/3"
+    role: fabric
+    mtu: 9214
+    ip_address: "10.0.0.5/31"
+  - device: leaf01
+    name: loopback0
+    description: "Router ID - leaf01"
+    role: loopback
+    ip_address: "10.1.0.2/32"
+
+  # Leaf02 interfaces
+  - device: leaf02
+    name: ethernet-1/49
+    description: "to spine01:ethernet-1/2"
+    role: fabric
+    mtu: 9214
+    ip_address: "10.0.0.3/31"
+  - device: leaf02
+    name: ethernet-1/50
+    description: "to spine01:ethernet-1/4"
+    role: fabric
+    mtu: 9214
+    ip_address: "10.0.0.7/31"
+  - device: leaf02
+    name: loopback0
+    description: "Router ID - leaf02"
+    role: loopback
+    ip_address: "10.1.0.3/32"
+
+# BGP sessions - eBGP underlay
+bgp_sessions:
+  # spine01 <-> leaf01 (link 1)
+  - description: "spine01:e1-1 <-> leaf01:e1-49 eBGP"
+    session_type: EXTERNAL
+    role: backbone
+    local_device: spine01
+    remote_device: leaf01
+    local_as: 65000
+    remote_as: 65001
+    local_ip: "10.0.0.0/31"
+    remote_ip: "10.0.0.1/31"
+
+  # spine01 <-> leaf01 (link 2)
+  - description: "spine01:e1-3 <-> leaf01:e1-50 eBGP"
+    session_type: EXTERNAL
+    role: backbone
+    local_device: spine01
+    remote_device: leaf01
+    local_as: 65000
+    remote_as: 65001
+    local_ip: "10.0.0.4/31"
+    remote_ip: "10.0.0.5/31"
+
+  # spine01 <-> leaf02 (link 1)
+  - description: "spine01:e1-2 <-> leaf02:e1-49 eBGP"
+    session_type: EXTERNAL
+    role: backbone
+    local_device: spine01
+    remote_device: leaf02
+    local_as: 65000
+    remote_as: 65002
+    local_ip: "10.0.0.2/31"
+    remote_ip: "10.0.0.3/31"
+
+  # spine01 <-> leaf02 (link 2)
+  - description: "spine01:e1-4 <-> leaf02:e1-50 eBGP"
+    session_type: EXTERNAL
+    role: backbone
+    local_device: spine01
+    remote_device: leaf02
+    local_as: 65000
+    remote_as: 65002
+    local_ip: "10.0.0.6/31"
+    remote_ip: "10.0.0.7/31"
+
+# VRF for fabric underlay
+vrfs:
+  - name: "default"
+    description: "Global routing table / default VRF"
+
+# BGP Peer Group
+bgp_peer_groups:
+  - name: "underlay-ipv4"
+    description: "eBGP underlay peer group for spine-leaf fabric"
+    address_family: ipv4
+    local_as: null
+    send_community: true

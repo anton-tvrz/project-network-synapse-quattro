@@ -1,0 +1,84 @@
+# CodeRabbit configuration for Network Synapse Quattro
+# Docs: https://docs.coderabbit.ai/reference/configuration
+
+language: "en-US"
+
+reviews:
+  # Post a high-level walkthrough summary on every PR
+  profile: "assertive"
+  request_changes_workflow: false
+  high_level_summary: true
+  high_level_summary_placeholder: "@coderabbitai summary"
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - "main"
+
+  # Path-specific instructions tuned to project conventions
+  path_instructions:
+    - path: "workers/synapse_workers/activities/**"
+      instructions: |
+        This is a Temporal activity module. Review for:
+        - Activities must be deterministic-safe (no randomness, no global state mutations).
+        - All Temporal activities should be decorated with @activity.defn.
+        - Exceptions should propagate naturally (do not swallow ActivityError).
+        - Prefer narrow exception handling — catch specific exceptions, not bare `except Exception`.
+        - Type annotations are required on all public functions (mypy is enforced).
+
+    - path: "workers/synapse_workers/workflows/**"
+      instructions: |
+        This is a Temporal workflow module. Review for:
+        - Workflows MUST be deterministic: no datetime.now(), no random, no I/O, no non-deterministic calls.
+        - Use workflow.now() instead of datetime.now().
+        - All workflow methods should be decorated with @workflow.defn / @workflow.run.
+        - Never call activities directly — use workflow.execute_activity().
+        - Type annotations required on all public interfaces.
+
+    - path: "backend/network_synapse/**"
+      instructions: |
+        This is the main backend package integrating with Infrahub (SoT) via GraphQL.
+        Review for:
+        - GraphQL queries should handle missing/None fields gracefully.
+        - Schema loading must be idempotent (safe to run multiple times).
+        - Jinja2 templates should escape user input where applicable.
+        - Type annotations required; prefer dataclasses or Pydantic models over plain dicts.
+
+    - path: "tests/**"
+      instructions: |
+        Test files using pytest. Review for:
+        - Each test should have a single, clear assertion focus.
+        - Use fixtures instead of setUp-style boilerplate.
+        - Unit tests must not make real network calls or hit external services — use mocks/monkeypatch.
+        - Test function names should follow: test_<what>_<when>_<expected>.
+
+    - path: ".github/workflows/**"
+      instructions: |
+        GitHub Actions workflows. Review for:
+        - Secrets must never be echoed or logged.
+        - All third-party actions should be pinned to a SHA (not a mutable tag like `v1`).
+        - Prefer `if: always()` only where required to avoid masking failures.
+        - Check for missing `permissions` scopes (principle of least privilege).
+
+    - path: "ansible/**"
+      instructions: |
+        Ansible playbooks for network automation. Review for:
+        - Playbooks must be idempotent.
+        - Use `changed_when` and `failed_when` explicitly where needed.
+        - No hardcoded credentials or IP addresses — use inventory variables.
+        - Tag all tasks for selective execution.
+
+  # Files to skip reviewing
+  path_filters:
+    - "!uv.lock"
+    - "!*.json"
+    - "!.secrets.baseline"
+    - "!changelog/**"
+    - "!library/**"
+
+chat:
+  # Allow @coderabbitai commands in PR comments
+  auto_reply: true

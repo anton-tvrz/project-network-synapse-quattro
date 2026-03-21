@@ -1,0 +1,34 @@
+# Auto-label PRs based on changed file paths
+# Used by actions/labeler
+
+backend:
+  - changed-files:
+      - any-glob-to-any-file: ["backend/**"]
+
+workers:
+  - changed-files:
+      - any-glob-to-any-file: ["workers/**"]
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file: ["tests/**"]
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file: ["docs/**", "dev/**", "*.md"]
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file: [".github/**"]
+
+infrastructure:
+  - changed-files:
+      - any-glob-to-any-file: ["development/**", "containerlab/**", "ansible/**"]
+
+schemas:
+  - changed-files:
+      - any-glob-to-any-file: ["backend/network_synapse/schemas/**", "library/**"]
+
+config:
+  - changed-files:
+      - any-glob-to-any-file: ["pyproject.toml", "uv.lock", ".pre-commit-config.yaml", ".editorconfig"]

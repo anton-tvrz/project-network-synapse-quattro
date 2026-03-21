@@ -1,0 +1,58 @@
+query DeviceBGPConfig($hostname: String!) {
+    DcimDevice(name__value: $hostname) {
+        edges {
+            node {
+                id
+                name { value }
+                description { value }
+                role { value }
+                status { value }
+                asn {
+                    node {
+                        asn { value }
+                        name { value }
+                    }
+                }
+            }
+        }
+    }
+    RoutingBGPSession(device__name__value: $hostname) {
+        edges {
+            node {
+                id
+                description { value }
+                session_type { value }
+                role { value }
+                status { value }
+                local_as {
+                    node { asn { value } }
+                }
+                remote_as {
+                    node { asn { value } }
+                }
+                local_ip {
+                    node { address { value } }
+                }
+                remote_ip {
+                    node { address { value } }
+                }
+                peer_group {
+                    node { name { value } }
+                }
+            }
+        }
+    }
+    InterfacePhysical(device__name__value: $hostname, role__value: "loopback") {
+        edges {
+            node {
+                name { value }
+                role { value }
+                ip_addresses {
+                    edges {
+                        node { address { value } }
+                    }
+                }
+            }
+        }
+    }
+}

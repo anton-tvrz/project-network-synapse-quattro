@@ -1,0 +1,25 @@
+# Gitleaks configuration — secrets detection
+# https://github.com/gitleaks/gitleaks
+
+title = "Project Network Synapse 3 — Gitleaks Config"
+
+[extend]
+# Use the default gitleaks rules as a base
+useDefault = true
+
+[allowlist]
+description = "Known safe patterns"
+paths = [
+    '''\.venv/''',
+    '''library/''',
+    '''uv\.lock''',
+    '''development/docker-compose.*\.yml''',
+    '''\.secrets\.baseline''',
+]
+
+# Allow test fixture IPs (not real infrastructure)
+regexTarget = "match"
+regexes = [
+    '''172\.20\.20\.\d+''',   # Containerlab management network (test fixtures)
+    '''10\.0\.0\.\d+''',      # Fabric p2p addresses (test fixtures)
+]

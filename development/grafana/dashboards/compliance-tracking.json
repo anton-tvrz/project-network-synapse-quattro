@@ -1,0 +1,51 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "panels": [
+    {
+      "title": "Hygiene Check Pass Rate (24h)",
+      "type": "gauge",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0},
+      "targets": [
+        {
+          "expr": "sum(hygiene_check_passed_total) / sum(hygiene_check_total) * 100",
+          "legendFormat": "Pass %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "percent", "max": 100, "thresholds": {"steps": [{"color": "red", "value": 0}, {"color": "yellow", "value": 90}, {"color": "green", "value": 99}]}}}
+    },
+    {
+      "title": "Config Drift Score",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0},
+      "targets": [
+        {"expr": "config_drift_score", "legendFormat": "{{device}}", "refId": "A"}
+      ],
+      "fieldConfig": {"defaults": {"thresholds": {"steps": [{"color": "green", "value": 0}, {"color": "yellow", "value": 1}, {"color": "red", "value": 5}]}}}
+    },
+    {
+      "title": "Devices by Compliance Status",
+      "type": "piechart",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0},
+      "targets": [
+        {"expr": "count(device_compliance_status == 1)", "legendFormat": "Compliant", "refId": "A"},
+        {"expr": "count(device_compliance_status == 0)", "legendFormat": "Non-Compliant", "refId": "B"}
+      ]
+    },
+    {
+      "title": "Hygiene Check Results Over Time",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8},
+      "targets": [
+        {"expr": "rate(hygiene_check_passed_total[1h])", "legendFormat": "Passed", "refId": "A"},
+        {"expr": "rate(hygiene_check_failed_total[1h])", "legendFormat": "Failed", "refId": "B"}
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["compliance", "hygiene"],
+  "time": {"from": "now-24h", "to": "now"},
+  "title": "Compliance Tracking",
+  "uid": "compliance-tracking"
+}

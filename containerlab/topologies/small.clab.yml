@@ -1,0 +1,29 @@
+# Small topology — Single leaf-spine pair
+# Nodes: 1x spine (ixr-d3), 1x leaf (ixr-d2)
+# Resources: ~2 vCPU / ~3 GB RAM
+# Use case: Minimal protocol testing, quick iteration, single BGP session validation
+# Deploy: sudo containerlab deploy --topo containerlab/topologies/small.clab.yml
+name: small-lab
+
+mgmt:
+  network: clab-small
+  ipv4-subnet: 172.20.30.0/24
+
+topology:
+  kinds:
+    nokia_srlinux:
+      image: ghcr.io/nokia/srlinux:24.10.1
+
+  nodes:
+    spine01:
+      kind: nokia_srlinux
+      type: ixr-d3
+      mgmt-ipv4: 172.20.30.10
+    leaf01:
+      kind: nokia_srlinux
+      type: ixr-d2
+      mgmt-ipv4: 172.20.30.20
+
+  links:
+    - endpoints: ["spine01:e1-1", "leaf01:e1-49"]
+    - endpoints: ["spine01:e1-2", "leaf01:e1-50"]

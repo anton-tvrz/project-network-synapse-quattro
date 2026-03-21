@@ -1,0 +1,392 @@
+# Seed data for Infrahub — Border-leaf topology (DC gateway with WAN connectivity)
+# Matches containerlab/topologies/border-leaf.clab.yml
+# Nokia SR Linux devices with eBGP underlay
+#
+# Network Design:
+#   - 3-tier: 2 DC-GW, 2 spines, 2 leaves (+ 2 servers + 1 wan-router, not in Infrahub)
+#   - eBGP underlay: each device has unique ASN
+#   - Fabric links: /31 point-to-point, full mesh per tier
+#   - Loopbacks: /32 for router-id
+#   - Management: 172.20.33.0/24 (Containerlab mgmt network)
+---
+
+organization:
+  name: "Synapse Lab"
+  description: "Network Synapse POC/MVP lab environment"
+
+manufacturer:
+  name: "Nokia"
+  description: "Nokia Corporation - SR Linux network operating system"
+
+location:
+  name: "Local Lab"
+  shortname: "local-lab"
+  description: "Local OrbStack Containerlab environment"
+
+platform:
+  name: "Nokia SR Linux"
+  description: "Nokia Service Router Linux (SR Linux)"
+  nornir_platform: "srlinux"
+  napalm_driver: "srl"
+  containerlab_os: "nokia_srlinux"
+  ansible_network_os: "nokia.srlinux.srlinux"
+  netmiko_device_type: "nokia_srl"
+
+device_types:
+  - name: "7220 IXR-D3"
+    description: "Nokia 7220 IXR-D3 - Spine/Aggregation switch"
+    part_number: "7220-IXR-D3"
+  - name: "7220 IXR-D2"
+    description: "Nokia 7220 IXR-D2 - Leaf/Top-of-Rack switch"
+    part_number: "7220-IXR-D2"
+
+autonomous_systems:
+  - name: "DCGW01 AS"
+    asn: 65000
+    description: "DC Gateway 01 autonomous system"
+  - name: "DCGW02 AS"
+    asn: 65001
+    description: "DC Gateway 02 autonomous system"
+  - name: "Spine01 AS"
+    asn: 65002
+    description: "Spine01 autonomous system"
+  - name: "Spine02 AS"
+    asn: 65003
+    description: "Spine02 autonomous system"
+  - name: "Leaf01 AS"
+    asn: 65004
+    description: "Leaf01 autonomous system"
+  - name: "Leaf02 AS"
+    asn: 65005
+    description: "Leaf02 autonomous system"
+
+devices:
+  # DC Gateways
+  - name: dcgw01
+    role: edge
+    status: active
+    device_type: "7220 IXR-D3"
+    management_ip: "172.20.33.2/24"
+    lab_node_name: "clab-border-leaf-lab-dcgw01"
+    asn: 65000
+    description: "DC Gateway 01 - Nokia 7220 IXR-D3"
+
+  - name: dcgw02
+    role: edge
+    status: active
+    device_type: "7220 IXR-D3"
+    management_ip: "172.20.33.3/24"
+    lab_node_name: "clab-border-leaf-lab-dcgw02"
+    asn: 65001
+    description: "DC Gateway 02 - Nokia 7220 IXR-D3"
+
+  # Spines
+  - name: spine01
+    role: spine
+    status: active
+    device_type: "7220 IXR-D3"
+    management_ip: "172.20.33.10/24"
+    lab_node_name: "clab-border-leaf-lab-spine01"
+    asn: 65002
+    description: "Spine switch 01 - Nokia 7220 IXR-D3"
+
+  - name: spine02
+    role: spine
+    status: active
+    device_type: "7220 IXR-D3"
+    management_ip: "172.20.33.11/24"
+    lab_node_name: "clab-border-leaf-lab-spine02"
+    asn: 65003
+    description: "Spine switch 02 - Nokia 7220 IXR-D3"
+
+  # Leaves
+  - name: leaf01
+    role: leaf
+    status: active
+    device_type: "7220 IXR-D2"
+    management_ip: "172.20.33.20/24"
+    lab_node_name: "clab-border-leaf-lab-leaf01"
+    asn: 65004
+    description: "Leaf switch 01 - Nokia 7220 IXR-D2"
+
+  - name: leaf02
+    role: leaf
+    status: active
+    device_type: "7220 IXR-D2"
+    management_ip: "172.20.33.21/24"
+    lab_node_name: "clab-border-leaf-lab-leaf02"
+    asn: 65005
+    description: "Leaf switch 02 - Nokia 7220 IXR-D2"
+
+# IP addressing plan for fabric underlay
+ip_prefixes:
+  - prefix: "172.20.33.0/24"
+    description: "Containerlab management network (border-leaf-lab)"
+  - prefix: "10.0.0.0/16"
+    description: "Fabric underlay supernet"
+  # DC-GW <-> Spine
+  - prefix: "10.0.0.0/31"
+    description: "dcgw01:e1-1 <-> spine01:e1-49"
+  - prefix: "10.0.0.2/31"
+    description: "dcgw01:e1-2 <-> spine02:e1-49"
+  - prefix: "10.0.0.4/31"
+    description: "dcgw02:e1-1 <-> spine01:e1-50"
+  - prefix: "10.0.0.6/31"
+    description: "dcgw02:e1-2 <-> spine02:e1-50"
+  # Spine <-> Leaf
+  - prefix: "10.0.0.8/31"
+    description: "spine01:e1-1 <-> leaf01:e1-49"
+  - prefix: "10.0.0.10/31"
+    description: "spine01:e1-2 <-> leaf02:e1-49"
+  - prefix: "10.0.0.12/31"
+    description: "spine02:e1-1 <-> leaf01:e1-50"
+  - prefix: "10.0.0.14/31"
+    description: "spine02:e1-2 <-> leaf02:e1-50"
+  - prefix: "10.1.0.0/24"
+    description: "Loopback supernet"
+
+interfaces:
+  # DCGW01 interfaces
+  - device: dcgw01
+    name: ethernet-1/1
+    description: "to spine01:ethernet-1/49"
+    role: fabric
+    mtu: 9214
+    ip_address: "10.0.0.0/31"
+  - device: dcgw01
+    name: ethernet-1/2
+    description: "to spine02:ethernet-1/49"
+    role: fabric
+    mtu: 9214
+    ip_address: "10.0.0.2/31"
+  - device: dcgw01
+    name: ethernet-1/49
+    description: "to wan-router:eth1 (WAN uplink)"
+    role: fabric
+    mtu: 9214
+  - device: dcgw01
+    name: loopback0
+    description: "Router ID - dcgw01"
+    role: loopback
+    ip_address: "10.1.0.1/32"
+
+  # DCGW02 interfaces
+  - device: dcgw02
+    name: ethernet-1/1
+    description: "to spine01:ethernet-1/50"
+    role: fabric
+    mtu: 9214
+    ip_address: "10.0.0.4/31"
+  - device: dcgw02
+    name: ethernet-1/2
+    description: "to spine02:ethernet-1/50"
+    role: fabric
+    mtu: 9214
+    ip_address: "10.0.0.6/31"
+  - device: dcgw02
+    name: ethernet-1/49
+    description: "to wan-router:eth2 (WAN uplink)"
+    role: fabric
+    mtu: 9214
+  - device: dcgw02
+    name: loopback0
+    description: "Router ID - dcgw02"
+    role: loopback
+    ip_address: "10.1.0.2/32"
+
+  # Spine01 interfaces
+  - device: spine01
+    name: ethernet-1/49
+    description: "to dcgw01:ethernet-1/1"
+    role: fabric
+    mtu: 9214
+    ip_address: "10.0.0.1/31"
+  - device: spine01
+    name: ethernet-1/50
+    description: "to dcgw02:ethernet-1/1"
+    role: fabric
+    mtu: 9214
+    ip_address: "10.0.0.5/31"
+  - device: spine01
+    name: ethernet-1/1
+    description: "to leaf01:ethernet-1/49"
+    role: fabric
+    mtu: 9214
+    ip_address: "10.0.0.8/31"
+  - device: spine01
+    name: ethernet-1/2
+    description: "to leaf02:ethernet-1/49"
+    role: fabric
+    mtu: 9214
+    ip_address: "10.0.0.10/31"
+  - device: spine01
+    name: loopback0
+    description: "Router ID - spine01"
+    role: loopback
+    ip_address: "10.1.0.3/32"
+
+  # Spine02 interfaces
+  - device: spine02
+    name: ethernet-1/49
+    description: "to dcgw01:ethernet-1/2"
+    role: fabric
+    mtu: 9214
+    ip_address: "10.0.0.3/31"
+  - device: spine02
+    name: ethernet-1/50
+    description: "to dcgw02:ethernet-1/2"
+    role: fabric
+    mtu: 9214
+    ip_address: "10.0.0.7/31"
+  - device: spine02
+    name: ethernet-1/1
+    description: "to leaf01:ethernet-1/50"
+    role: fabric
+    mtu: 9214
+    ip_address: "10.0.0.12/31"
+  - device: spine02
+    name: ethernet-1/2
+    description: "to leaf02:ethernet-1/50"
+    role: fabric
+    mtu: 9214
+    ip_address: "10.0.0.14/31"
+  - device: spine02
+    name: loopback0
+    description: "Router ID - spine02"
+    role: loopback
+    ip_address: "10.1.0.4/32"
+
+  # Leaf01 interfaces
+  - device: leaf01
+    name: ethernet-1/49
+    description: "to spine01:ethernet-1/1"
+    role: fabric
+    mtu: 9214
+    ip_address: "10.0.0.9/31"
+  - device: leaf01
+    name: ethernet-1/50
+    description: "to spine02:ethernet-1/1"
+    role: fabric
+    mtu: 9214
+    ip_address: "10.0.0.13/31"
+  - device: leaf01
+    name: loopback0
+    description: "Router ID - leaf01"
+    role: loopback
+    ip_address: "10.1.0.5/32"
+
+  # Leaf02 interfaces
+  - device: leaf02
+    name: ethernet-1/49
+    description: "to spine01:ethernet-1/2"
+    role: fabric
+    mtu: 9214
+    ip_address: "10.0.0.11/31"
+  - device: leaf02
+    name: ethernet-1/50
+    description: "to spine02:ethernet-1/2"
+    role: fabric
+    mtu: 9214
+    ip_address: "10.0.0.15/31"
+  - device: leaf02
+    name: loopback0
+    description: "Router ID - leaf02"
+    role: loopback
+    ip_address: "10.1.0.6/32"
+
+# BGP sessions - eBGP underlay
+bgp_sessions:
+  # DC-GW <-> Spine tier
+  - description: "dcgw01:e1-1 <-> spine01:e1-49 eBGP"
+    session_type: EXTERNAL
+    role: backbone
+    local_device: dcgw01
+    remote_device: spine01
+    local_as: 65000
+    remote_as: 65002
+    local_ip: "10.0.0.0/31"
+    remote_ip: "10.0.0.1/31"
+
+  - description: "dcgw01:e1-2 <-> spine02:e1-49 eBGP"
+    session_type: EXTERNAL
+    role: backbone
+    local_device: dcgw01
+    remote_device: spine02
+    local_as: 65000
+    remote_as: 65003
+    local_ip: "10.0.0.2/31"
+    remote_ip: "10.0.0.3/31"
+
+  - description: "dcgw02:e1-1 <-> spine01:e1-50 eBGP"
+    session_type: EXTERNAL
+    role: backbone
+    local_device: dcgw02
+    remote_device: spine01
+    local_as: 65001
+    remote_as: 65002
+    local_ip: "10.0.0.4/31"
+    remote_ip: "10.0.0.5/31"
+
+  - description: "dcgw02:e1-2 <-> spine02:e1-50 eBGP"
+    session_type: EXTERNAL
+    role: backbone
+    local_device: dcgw02
+    remote_device: spine02
+    local_as: 65001
+    remote_as: 65003
+    local_ip: "10.0.0.6/31"
+    remote_ip: "10.0.0.7/31"
+
+  # Spine <-> Leaf tier
+  - description: "spine01:e1-1 <-> leaf01:e1-49 eBGP"
+    session_type: EXTERNAL
+    role: backbone
+    local_device: spine01
+    remote_device: leaf01
+    local_as: 65002
+    remote_as: 65004
+    local_ip: "10.0.0.8/31"
+    remote_ip: "10.0.0.9/31"
+
+  - description: "spine01:e1-2 <-> leaf02:e1-49 eBGP"
+    session_type: EXTERNAL
+    role: backbone
+    local_device: spine01
+    remote_device: leaf02
+    local_as: 65002
+    remote_as: 65005
+    local_ip: "10.0.0.10/31"
+    remote_ip: "10.0.0.11/31"
+
+  - description: "spine02:e1-1 <-> leaf01:e1-50 eBGP"
+    session_type: EXTERNAL
+    role: backbone
+    local_device: spine02
+    remote_device: leaf01
+    local_as: 65003
+    remote_as: 65004
+    local_ip: "10.0.0.12/31"
+    remote_ip: "10.0.0.13/31"
+
+  - description: "spine02:e1-2 <-> leaf02:e1-50 eBGP"
+    session_type: EXTERNAL
+    role: backbone
+    local_device: spine02
+    remote_device: leaf02
+    local_as: 65003
+    remote_as: 65005
+    local_ip: "10.0.0.14/31"
+    remote_ip: "10.0.0.15/31"
+
+# VRF for fabric underlay
+vrfs:
+  - name: "default"
+    description: "Global routing table / default VRF"
+
+# BGP Peer Group
+bgp_peer_groups:
+  - name: "underlay-ipv4"
+    description: "eBGP underlay peer group for spine-leaf fabric"
+    address_family: ipv4
+    local_as: null
+    send_community: true

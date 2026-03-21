@@ -1,0 +1,3 @@
+[submodule "library/schema-library"]
+	path = library/schema-library
+	url = https://github.com/opsmill/schema-library.git

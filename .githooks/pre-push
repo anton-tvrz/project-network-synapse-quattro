@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Pre-push hook — prevents pushing directly to main.
+# Feature branches must be pushed to origin and PRs must target main.
+#
+# Install (one-time):
+#   git config core.hooksPath .githooks
+#
+# Or symlink into .git/hooks/:
+#   ln -sf ../../.githooks/pre-push .git/hooks/pre-push
+
+set -euo pipefail
+
+PROTECTED_BRANCHES="^(main)$"
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+    # Extract branch name from refs/heads/<branch>
+    remote_branch="${remote_ref#refs/heads/}"
+
+    if [[ "$remote_branch" =~ $PROTECTED_BRANCHES ]]; then
+        echo "ERROR: Direct push to '$remote_branch' is not allowed."
+        echo ""
+        echo "  All changes must go through Pull Requests."
+        echo "  Push to a feature branch and open a PR targeting 'main':"
+        echo ""
+        echo "    git push origin feature/<name>"
+        echo "    gh pr create --base main"
+        echo ""
+        exit 1
+    fi
+done
+
+exit 0

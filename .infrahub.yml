@@ -1,0 +1,40 @@
+# Infrahub repository manifest
+# Declares transforms, checks, and GraphQL queries for Git sync
+---
+python_transforms:
+  - name: "srlinux_bgp_config"
+    file_path: "backend/network_synapse/transforms/srlinux_bgp_transform.py"
+    class_name: "SRLinuxBGPTransform"
+
+  - name: "srlinux_interface_config"
+    file_path: "backend/network_synapse/transforms/srlinux_interface_transform.py"
+    class_name: "SRLinuxInterfaceTransform"
+
+check_definitions:
+  - name: "validate_bgp_sessions"
+    file_path: "backend/network_synapse/checks/bgp_session_check.py"
+    class_name: "BGPSessionCheck"
+
+  - name: "validate_ip_uniqueness"
+    file_path: "backend/network_synapse/checks/ip_uniqueness_check.py"
+    class_name: "IPUniquenessCheck"
+
+  - name: "validate_interface_consistency"
+    file_path: "backend/network_synapse/checks/interface_consistency_check.py"
+    class_name: "InterfaceConsistencyCheck"
+
+queries:
+  - name: "device_bgp_config"
+    file_path: "backend/network_synapse/queries/device_bgp_config.gql"
+
+  - name: "device_interface_config"
+    file_path: "backend/network_synapse/queries/device_interface_config.gql"
+
+  - name: "all_bgp_sessions"
+    file_path: "backend/network_synapse/queries/all_bgp_sessions.gql"
+
+  - name: "all_ip_addresses"
+    file_path: "backend/network_synapse/queries/all_ip_addresses.gql"
+
+  - name: "all_device_interfaces"
+    file_path: "backend/network_synapse/queries/all_device_interfaces.gql"

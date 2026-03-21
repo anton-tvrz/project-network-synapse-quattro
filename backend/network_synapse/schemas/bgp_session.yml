@@ -1,0 +1,28 @@
+# Infrahub schema: BGP Session for Synapse project
+# Uses the schema-library routing_bgp extension directly
+# This file documents the schema dependency chain for the project
+#
+# Load order (handled by infrahub/schemas/load_schemas.py):
+#   1. library/schema-library/extensions/vrf/vrf.yml          -> IpamVRF, IpamRouteTarget
+#   2. library/schema-library/extensions/routing/routing.yml   -> RoutingProtocol (generic)
+#   3. library/schema-library/extensions/routing_bgp/bgp.yml
+#      -> RoutingAutonomousSystem, RoutingBGPPeerGroup, RoutingBGPSession
+#   4. infrahub/schemas/network_device.yml
+#      -> DcimDevice extensions (management_ip, lab_node_name, asn)
+#   5. infrahub/schemas/network_interface.yml
+#      -> InterfacePhysical extensions (role)
+#
+# The routing_bgp extension provides:
+#   - RoutingAutonomousSystem: ASN with name, number, organization, location, devices
+#   - RoutingBGPPeerGroup: Reusable BGP peer group parameters
+#   - RoutingBGPSession: Point-to-point BGP session with local/remote AS, IPs, device, peer_group
+#   - Extension to DcimGenericDevice: adds 'asn' relationship
+#   - Extension to OrganizationGeneric: adds 'asn' relationship
+#
+# No additional custom BGP schema needed — the schema-library extension covers our use case.
+# This file is kept as documentation of the schema architecture.
+---
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+version: "1.0"
+# Schema provided by library/schema-library/extensions/routing_bgp/bgp.yml
+# No custom nodes or extensions needed for BGP

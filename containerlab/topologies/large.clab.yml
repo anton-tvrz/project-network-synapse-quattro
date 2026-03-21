@@ -1,0 +1,72 @@
+# Large topology — Full Clos fabric
+# Nodes: 2x spine (ixr-d3), 4x leaf (ixr-d2), 4x server (linux)
+# Resources: ~4 vCPU / ~12 GB RAM
+# Use case: Production-like testing, ECMP, redundancy, failure scenario testing
+# Deploy: sudo containerlab deploy --topo containerlab/topologies/large.clab.yml
+name: large-lab
+
+mgmt:
+  network: clab-large
+  ipv4-subnet: 172.20.32.0/24
+
+topology:
+  kinds:
+    nokia_srlinux:
+      image: ghcr.io/nokia/srlinux:24.10.1
+    linux:
+      image: ghcr.io/srl-labs/network-multitool
+
+  nodes:
+    spine01:
+      kind: nokia_srlinux
+      type: ixr-d3
+      mgmt-ipv4: 172.20.32.10
+    spine02:
+      kind: nokia_srlinux
+      type: ixr-d3
+      mgmt-ipv4: 172.20.32.11
+    leaf01:
+      kind: nokia_srlinux
+      type: ixr-d2
+      mgmt-ipv4: 172.20.32.20
+    leaf02:
+      kind: nokia_srlinux
+      type: ixr-d2
+      mgmt-ipv4: 172.20.32.21
+    leaf03:
+      kind: nokia_srlinux
+      type: ixr-d2
+      mgmt-ipv4: 172.20.32.22
+    leaf04:
+      kind: nokia_srlinux
+      type: ixr-d2
+      mgmt-ipv4: 172.20.32.23
+    srv01:
+      kind: linux
+      mgmt-ipv4: 172.20.32.30
+    srv02:
+      kind: linux
+      mgmt-ipv4: 172.20.32.31
+    srv03:
+      kind: linux
+      mgmt-ipv4: 172.20.32.32
+    srv04:
+      kind: linux
+      mgmt-ipv4: 172.20.32.33
+
+  links:
+    # Fabric: spine01 <-> all leaves (e1-49 on leaf side)
+    - endpoints: ["spine01:e1-1", "leaf01:e1-49"]
+    - endpoints: ["spine01:e1-2", "leaf02:e1-49"]
+    - endpoints: ["spine01:e1-3", "leaf03:e1-49"]
+    - endpoints: ["spine01:e1-4", "leaf04:e1-49"]
+    # Fabric: spine02 <-> all leaves (e1-50 on leaf side)
+    - endpoints: ["spine02:e1-1", "leaf01:e1-50"]
+    - endpoints: ["spine02:e1-2", "leaf02:e1-50"]
+    - endpoints: ["spine02:e1-3", "leaf03:e1-50"]
+    - endpoints: ["spine02:e1-4", "leaf04:e1-50"]
+    # Server: leaf <-> host (one server per leaf)
+    - endpoints: ["leaf01:e1-1", "srv01:eth1"]
+    - endpoints: ["leaf02:e1-1", "srv02:eth1"]
+    - endpoints: ["leaf03:e1-1", "srv03:eth1"]
+    - endpoints: ["leaf04:e1-1", "srv04:eth1"]

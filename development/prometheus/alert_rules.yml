@@ -1,0 +1,78 @@
+groups:
+  - name: network_synapse_alerts
+    rules:
+      # -----------------------------------------------------------------------
+      # BGP session alerts
+      # -----------------------------------------------------------------------
+      - alert: BGPSessionDown
+        expr: bgp_session_state{state!="established"} == 1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "BGP session {{ $labels.peer }} on {{ $labels.device }} is DOWN"
+          description: >-
+            The BGP session to peer {{ $labels.peer }} on device
+            {{ $labels.device }} has been in state {{ $labels.state }}
+            for more than 2 minutes.
+
+      # -----------------------------------------------------------------------
+      # Node reachability alerts
+      # -----------------------------------------------------------------------
+      - alert: NetworkDeviceUnreachable
+        expr: probe_success{job="network_devices"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Network device {{ $labels.instance }} is UNREACHABLE"
+          description: >-
+            The network device {{ $labels.instance }} has been unreachable
+            for more than 1 minute. Check physical connectivity or SSH/gNMI
+            access.
+
+      # -----------------------------------------------------------------------
+      # Interface flap detection
+      # -----------------------------------------------------------------------
+      - alert: InterfaceFlapDetected
+        expr: rate(interface_state_changes_total[5m]) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Interface {{ $labels.interface }} on {{ $labels.device }} is FLAPPING"
+          description: >-
+            Interface {{ $labels.interface }} on {{ $labels.device }} has
+            changed state more than 3 times in the last 5 minutes. This
+            indicates instability.
+
+      # -----------------------------------------------------------------------
+      # Temporal workflow failure alerts
+      # -----------------------------------------------------------------------
+      - alert: TemporalWorkflowFailureRate
+        expr: >-
+          rate(temporal_workflow_completed{status="failed"}[10m])
+            /
+          rate(temporal_workflow_completed[10m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High Temporal workflow failure rate"
+          description: >-
+            More than 50% of Temporal workflows have failed in the last
+            10 minutes. Check the Temporal UI for details.
+
+      # -----------------------------------------------------------------------
+      # Infrahub connectivity alert
+      # -----------------------------------------------------------------------
+      - alert: InfrahubApiDown
+        expr: probe_success{job="infrahub"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Infrahub API is DOWN"
+          description: >-
+            The Infrahub source-of-truth API has been unreachable for more
+            than 2 minutes. Configuration generation workflows will fail.

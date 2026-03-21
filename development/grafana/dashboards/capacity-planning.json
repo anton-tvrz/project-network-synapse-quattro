@@ -1,0 +1,66 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "panels": [
+    {
+      "title": "CPU Utilization Trend (7d)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [
+        {
+          "expr": "100 - (avg by(instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[1h])) * 100)",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "percent"}}
+    },
+    {
+      "title": "Memory Utilization Trend (7d)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [
+        {
+          "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
+          "legendFormat": "Memory %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "percent"}}
+    },
+    {
+      "title": "Disk Growth Rate",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "targets": [
+        {
+          "expr": "predict_linear(node_filesystem_avail_bytes{mountpoint=\"/\"}[7d], 30*24*3600)",
+          "legendFormat": "Projected (30d)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "bytes"}}
+    },
+    {
+      "title": "Network Device Count",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 6, "x": 12, "y": 8},
+      "targets": [
+        {"expr": "count(up{job=\"network_devices\"})", "legendFormat": "Devices", "refId": "A"}
+      ]
+    },
+    {
+      "title": "Workflow Volume (7d)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 6, "x": 18, "y": 8},
+      "targets": [
+        {"expr": "increase(temporal_workflow_completed[1d])", "legendFormat": "Workflows/day", "refId": "A"}
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["capacity", "planning"],
+  "time": {"from": "now-7d", "to": "now"},
+  "title": "Capacity Planning",
+  "uid": "capacity-planning"
+}

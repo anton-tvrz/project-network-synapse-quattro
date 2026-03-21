@@ -1,0 +1,32 @@
+# Infrahub schema extension: Network Device customizations for Synapse project
+# This extends the base DcimDevice with project-specific attributes
+# Base DcimDevice already provides: name, description, platform, device_type, role, status, location, interfaces, etc.
+#
+# Dependencies: base schemas (dcim, ipam, location, organization) must be loaded first
+# These are already loaded in the Infrahub instance from the schema-library base/
+---
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+version: "1.0"
+
+extensions:
+  nodes:
+    - kind: DcimDevice
+      attributes:
+        - name: management_ip
+          kind: IPHost
+          optional: true
+          description: "Management IP address for out-of-band access"
+          order_weight: 1500
+        - name: lab_node_name
+          kind: Text
+          optional: true
+          description: "Containerlab node name (e.g., clab-spine-leaf-lab-spine01)"
+          order_weight: 1510
+      relationships:
+        - name: asn
+          peer: RoutingAutonomousSystem
+          optional: true
+          cardinality: one
+          kind: Attribute
+          description: "Primary ASN assigned to this device"
+          order_weight: 1600

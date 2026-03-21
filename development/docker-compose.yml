@@ -1,0 +1,93 @@
+# Full development environment — all services
+# Usage: docker compose -f development/docker-compose.yml up -d
+# Or: uv run invoke dev.start
+
+x-common-env: &common-env
+  INFRAHUB_URL: http://infrahub-server:8000
+  TEMPORAL_ADDRESS: temporal:7233
+
+services:
+  # ---------------------------------------------------------------------------
+  # Infrahub — Source of Truth
+  # ---------------------------------------------------------------------------
+  infrahub-database:
+    image: neo4j:5-community
+    environment:
+      NEO4J_AUTH: neo4j/infrahub
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_security_procedures_unrestricted: "apoc.*"
+    ports:
+      - "${NEO4J_PORT:-7687}:7687"
+      - "${NEO4J_HTTP_PORT:-7474}:7474"
+    volumes:
+      - neo4j_data:/data
+
+  infrahub-cache:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+
+  infrahub-message-queue:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MGMT_PORT:-15672}:15672"
+
+  infrahub-server:
+    image: registry.opsmill.io/opsmill/infrahub:stable
+    depends_on:
+      - infrahub-database
+      - infrahub-cache
+      - infrahub-message-queue
+    environment:
+      INFRAHUB_DB_TYPE: neo4j
+      INFRAHUB_DB_ADDRESS: infrahub-database
+      INFRAHUB_DB_PORT: 7687
+      INFRAHUB_DB_USERNAME: neo4j
+      INFRAHUB_DB_PASSWORD: infrahub
+      INFRAHUB_CACHE_ADDRESS: infrahub-cache
+      INFRAHUB_CACHE_PORT: 6379
+      INFRAHUB_BROKER_ADDRESS: infrahub-message-queue
+      INFRAHUB_BROKER_PORT: 5672
+    ports:
+      - "${INFRAHUB_PORT:-8000}:8000"
+
+  # ---------------------------------------------------------------------------
+  # Temporal — Workflow Orchestration
+  # ---------------------------------------------------------------------------
+  temporal:
+    image: temporalio/auto-setup:latest
+    environment:
+      DB: sqlite
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
+    ports:
+      - "${TEMPORAL_PORT:-7233}:7233"
+    volumes:
+      - temporal_data:/var/lib/temporal
+
+  temporal-ui:
+    image: temporalio/ui:latest
+    depends_on:
+      - temporal
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+    ports:
+      - "${TEMPORAL_UI_PORT:-8080}:8080"
+
+  # ---------------------------------------------------------------------------
+  # Synapse Worker — our Temporal worker
+  # ---------------------------------------------------------------------------
+  synapse-worker:
+    build:
+      context: ..
+      dockerfile: development/Dockerfile
+    depends_on:
+      - temporal
+      - infrahub-server
+    environment:
+      <<: *common-env
+    restart: unless-stopped
+
+volumes:
+  neo4j_data:
+  temporal_data:

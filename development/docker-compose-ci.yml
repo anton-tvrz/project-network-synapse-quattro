@@ -1,0 +1,48 @@
+# Minimal Infrahub stack for CI schema validation and integration tests
+# No Temporal, telemetry, or app containers — just what's needed to validate schemas/data.
+#
+# Usage:
+#   docker compose -f development/docker-compose-ci.yml up -d
+#   # Wait for health check...
+#   docker compose -f development/docker-compose-ci.yml down -v
+
+services:
+  infrahub-database:
+    image: neo4j:5-community
+    environment:
+      NEO4J_AUTH: neo4j/infrahub
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_security_procedures_unrestricted: "apoc.*"
+    tmpfs:
+      - /data  # Ephemeral storage for CI speed
+
+  infrahub-cache:
+    image: redis:7-alpine
+
+  infrahub-message-queue:
+    image: rabbitmq:3-management-alpine
+
+  infrahub-server:
+    image: registry.opsmill.io/opsmill/infrahub:stable
+    depends_on:
+      - infrahub-database
+      - infrahub-cache
+      - infrahub-message-queue
+    environment:
+      INFRAHUB_DB_TYPE: neo4j
+      INFRAHUB_DB_ADDRESS: infrahub-database
+      INFRAHUB_DB_PORT: 7687
+      INFRAHUB_DB_USERNAME: neo4j
+      INFRAHUB_DB_PASSWORD: infrahub
+      INFRAHUB_CACHE_ADDRESS: infrahub-cache
+      INFRAHUB_CACHE_PORT: 6379
+      INFRAHUB_BROKER_ADDRESS: infrahub-message-queue
+      INFRAHUB_BROKER_PORT: 5672
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/api/schema/summary"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s

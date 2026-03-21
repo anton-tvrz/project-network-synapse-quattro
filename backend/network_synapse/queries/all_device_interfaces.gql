@@ -1,0 +1,26 @@
+query AllDeviceInterfaces {
+    InterfacePhysical {
+        edges {
+            node {
+                id
+                name { value }
+                description { value }
+                mtu { value }
+                role { value }
+                status { value }
+                device {
+                    node {
+                        name { value }
+                    }
+                }
+                ip_addresses {
+                    edges {
+                        node {
+                            address { value }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

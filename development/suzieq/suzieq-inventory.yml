@@ -1,0 +1,11 @@
+sources:
+  - name: containerlab-fabric
+    hosts:
+      - default:
+          username: admin
+          password: NokiaSrl1!
+          devtype: linux
+          port: 22
+      - url: ssh://172.20.20.2    # spine01
+      - url: ssh://172.20.20.3    # leaf01
+      - url: ssh://172.20.20.4    # leaf02

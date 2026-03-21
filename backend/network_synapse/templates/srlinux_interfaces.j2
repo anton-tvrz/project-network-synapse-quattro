@@ -1,0 +1,30 @@
+{# Nokia SR Linux interface configuration template — renders JSON structured data #}
+{# Applied via gNMI SET to /interface #}
+{
+    "interface": [
+{% for interface in interfaces %}
+        {
+            "name": "{{ interface.name }}",
+            "description": "{{ interface.description | default('') }}",
+            "admin-state": "{{ 'enable' if interface.enabled | default(true) else 'disable' }}",
+            "mtu": {{ interface.mtu | default(9214) }},
+            "subinterface": [
+                {
+                    "index": {{ interface.subinterface_index | default(0) }},
+{% if interface.ip_address %}
+                    "ipv4": {
+                        "admin-state": "enable",
+                        "address": [
+                            {
+                                "ip-prefix": "{{ interface.ip_address }}"
+                            }
+                        ]
+                    },
+{% endif %}
+                    "description": "{{ interface.description | default('') }}"
+                }
+            ]
+        }{{ "," if not loop.last else "" }}
+{% endfor %}
+    ]
+}

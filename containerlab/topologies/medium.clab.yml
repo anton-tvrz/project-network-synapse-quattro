@@ -1,0 +1,47 @@
+# Medium topology — Enhanced spine-leaf with hosts
+# Nodes: 1x spine (ixr-d3), 2x leaf (ixr-d2), 2x server (linux)
+# Resources: ~2 vCPU / ~6 GB RAM
+# Use case: Multi-path testing, basic service validation, end-to-end traffic between hosts
+# Deploy: sudo containerlab deploy --topo containerlab/topologies/medium.clab.yml
+name: medium-lab
+
+mgmt:
+  network: clab-medium
+  ipv4-subnet: 172.20.31.0/24
+
+topology:
+  kinds:
+    nokia_srlinux:
+      image: ghcr.io/nokia/srlinux:24.10.1
+    linux:
+      image: ghcr.io/srl-labs/network-multitool
+
+  nodes:
+    spine01:
+      kind: nokia_srlinux
+      type: ixr-d3
+      mgmt-ipv4: 172.20.31.10
+    leaf01:
+      kind: nokia_srlinux
+      type: ixr-d2
+      mgmt-ipv4: 172.20.31.20
+    leaf02:
+      kind: nokia_srlinux
+      type: ixr-d2
+      mgmt-ipv4: 172.20.31.21
+    srv01:
+      kind: linux
+      mgmt-ipv4: 172.20.31.30
+    srv02:
+      kind: linux
+      mgmt-ipv4: 172.20.31.31
+
+  links:
+    # Fabric: spine <-> leaf (dual uplinks per leaf)
+    - endpoints: ["spine01:e1-1", "leaf01:e1-49"]
+    - endpoints: ["spine01:e1-2", "leaf02:e1-49"]
+    - endpoints: ["spine01:e1-3", "leaf01:e1-50"]
+    - endpoints: ["spine01:e1-4", "leaf02:e1-50"]
+    # Server: leaf <-> host
+    - endpoints: ["leaf01:e1-1", "srv01:eth1"]
+    - endpoints: ["leaf02:e1-1", "srv02:eth1"]

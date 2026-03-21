@@ -1,0 +1,75 @@
+# Border-leaf topology — DC gateway with WAN connectivity
+# Nodes: 2x dcgw (ixr-d3), 2x spine (ixr-d3), 2x leaf (ixr-d2), 2x server + 1x wan-router (linux)
+# Resources: ~4 vCPU / ~14 GB RAM
+# Use case: External connectivity, border routing, DCI testing
+# Deploy: sudo containerlab deploy --topo containerlab/topologies/border-leaf.clab.yml
+name: border-leaf-lab
+
+mgmt:
+  network: clab-border
+  ipv4-subnet: 172.20.33.0/24
+
+topology:
+  kinds:
+    nokia_srlinux:
+      image: ghcr.io/nokia/srlinux:24.10.1
+    linux:
+      image: ghcr.io/srl-labs/network-multitool
+
+  nodes:
+    # DC Gateways
+    dcgw01:
+      kind: nokia_srlinux
+      type: ixr-d3
+      mgmt-ipv4: 172.20.33.2
+    dcgw02:
+      kind: nokia_srlinux
+      type: ixr-d3
+      mgmt-ipv4: 172.20.33.3
+    # Spines
+    spine01:
+      kind: nokia_srlinux
+      type: ixr-d3
+      mgmt-ipv4: 172.20.33.10
+    spine02:
+      kind: nokia_srlinux
+      type: ixr-d3
+      mgmt-ipv4: 172.20.33.11
+    # Leaves
+    leaf01:
+      kind: nokia_srlinux
+      type: ixr-d2
+      mgmt-ipv4: 172.20.33.20
+    leaf02:
+      kind: nokia_srlinux
+      type: ixr-d2
+      mgmt-ipv4: 172.20.33.21
+    # Servers
+    srv01:
+      kind: linux
+      mgmt-ipv4: 172.20.33.30
+    srv02:
+      kind: linux
+      mgmt-ipv4: 172.20.33.31
+    # WAN Router
+    wan-router:
+      kind: linux
+      mgmt-ipv4: 172.20.33.32
+
+  links:
+    # DC-GW <-> Spine (full mesh)
+    - endpoints: ["dcgw01:e1-1", "spine01:e1-49"]
+    - endpoints: ["dcgw01:e1-2", "spine02:e1-49"]
+    - endpoints: ["dcgw02:e1-1", "spine01:e1-50"]
+    - endpoints: ["dcgw02:e1-2", "spine02:e1-50"]
+    # Spine <-> Leaf (full mesh)
+    - endpoints: ["spine01:e1-1", "leaf01:e1-49"]
+    - endpoints: ["spine01:e1-2", "leaf02:e1-49"]
+    - endpoints: ["spine02:e1-1", "leaf01:e1-50"]
+    - endpoints: ["spine02:e1-2", "leaf02:e1-50"]
+    # Leaf <-> Server
+    - endpoints: ["leaf01:e1-1", "srv01:eth1"]
+    - endpoints: ["leaf02:e1-1", "srv02:eth1"]
+    # DC-GW <-> WAN Router
+    - endpoints: ["dcgw01:e1-49", "wan-router:eth1"]
+    - endpoints: ["dcgw02:e1-49", "wan-router:eth2"]

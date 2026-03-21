@@ -1,0 +1,15 @@
+---
+# TODO: Replace arista.eos module with nokia.srlinux or URI-based JSON-RPC
+# TODO: Add pre-deploy backup task
+# TODO: Add post-deploy validation task
+# TODO: Wire inventory to Infrahub dynamic inventory plugin
+- name: Deploy BGP configuration
+  hosts: all
+  gather_facts: false
+
+  tasks:
+    - name: Deploy BGP config via JSON-RPC
+      # TODO: Switch to nokia.srlinux collection or ansible.builtin.uri for JSON-RPC
+      # arista.eos.eos_config is a placeholder — does NOT work with SR Linux
+      ansible.builtin.debug:
+        msg: "Placeholder — replace with SR Linux JSON-RPC or gNMI deployment"

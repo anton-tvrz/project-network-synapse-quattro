@@ -1,0 +1,28 @@
+# Spine-leaf topology definition for Containerlab — Nokia SR Linux
+# Deployed on: local OrbStack (macOS Apple Silicon)
+# Management network: 172.20.20.0/24 (DHCP assigned by clab)
+# Deploy: sudo containerlab deploy --topo topology.clab.yml
+# Destroy: sudo containerlab destroy --topo topology.clab.yml
+name: spine-leaf-lab
+
+topology:
+  kinds:
+    nokia_srlinux:
+      image: ghcr.io/nokia/srlinux:latest
+
+  nodes:
+    spine01:
+      kind: nokia_srlinux
+      type: ixr-d3
+    leaf01:
+      kind: nokia_srlinux
+      type: ixr-d2
+    leaf02:
+      kind: nokia_srlinux
+      type: ixr-d2
+
+  links:
+    - endpoints: ["spine01:e1-1", "leaf01:e1-49"]
+    - endpoints: ["spine01:e1-2", "leaf02:e1-49"]
+    - endpoints: ["spine01:e1-3", "leaf01:e1-50"]
+    - endpoints: ["spine01:e1-4", "leaf02:e1-50"]

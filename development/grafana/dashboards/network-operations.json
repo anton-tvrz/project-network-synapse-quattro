@@ -1,0 +1,55 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "panels": [
+    {
+      "title": "BGP Session Status",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 8, "x": 0, "y": 0},
+      "targets": [
+        {"expr": "count(bgp_session_state{state=\"established\"})", "legendFormat": "Established", "refId": "A"},
+        {"expr": "count(bgp_session_state{state!=\"established\"})", "legendFormat": "Down", "refId": "B"}
+      ],
+      "fieldConfig": {"defaults": {"thresholds": {"steps": [{"color": "green", "value": 0}]}}}
+    },
+    {
+      "title": "BGP Sessions Over Time",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 16, "x": 8, "y": 0},
+      "targets": [
+        {"expr": "bgp_session_state", "legendFormat": "{{device}} → {{peer}}", "refId": "A"}
+      ]
+    },
+    {
+      "title": "Interface Oper-State",
+      "type": "table",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 4},
+      "targets": [
+        {"expr": "interface_oper_state", "legendFormat": "", "refId": "A", "format": "table", "instant": true}
+      ]
+    },
+    {
+      "title": "Interface Traffic (bps)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+      "targets": [
+        {"expr": "rate(interface_in_octets_total[5m]) * 8", "legendFormat": "{{device}} {{interface}} RX", "refId": "A"},
+        {"expr": "rate(interface_out_octets_total[5m]) * 8", "legendFormat": "{{device}} {{interface}} TX", "refId": "B"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "bps"}}
+    },
+    {
+      "title": "Route Count by Device",
+      "type": "bargauge",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+      "targets": [
+        {"expr": "routing_table_route_count", "legendFormat": "{{device}}", "refId": "A"}
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["network", "operations"],
+  "time": {"from": "now-1h", "to": "now"},
+  "title": "Network Operations",
+  "uid": "network-operations"
+}
