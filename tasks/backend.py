@@ -64,6 +64,8 @@ def load_schemas(ctx):
         raise RuntimeError(f"Missing required env vars: {', '.join(missing)}. See .env.example")
 
     batch_names = ["base", "extensions", "project"]
+    # infrahubctl schema load performs atomic validation and guarantees schema integrity
+    # so no extra verification is required after loading.
     for name, files in zip(batch_names, SCHEMA_LOAD_BATCHES, strict=True):
         file_args = " ".join(files)
         print(f"\n📦 Loading {name} schemas...")

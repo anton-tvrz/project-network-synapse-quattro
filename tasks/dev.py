@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import shlex
+from typing import TYPE_CHECKING
 
 from invoke import task
+
+if TYPE_CHECKING:
+    from invoke.context import Context
 
 from .shared import PROJECT_ROOT, execute_command
 
@@ -40,7 +44,7 @@ def deps_stop(ctx):
 
 
 @task
-def lab_deploy(ctx):
+def lab_deploy(ctx: Context) -> None:
     """Deploy Containerlab topology."""
     quoted_root = shlex.quote(str(PROJECT_ROOT))
     cmd = (
@@ -57,7 +61,7 @@ def lab_deploy(ctx):
 
 
 @task
-def lab_destroy(ctx):
+def lab_destroy(ctx: Context) -> None:
     """Destroy Containerlab topology."""
     quoted_root = shlex.quote(str(PROJECT_ROOT))
     cmd = (
@@ -74,7 +78,7 @@ def lab_destroy(ctx):
 
 
 @task
-def lab_graph(ctx):
+def lab_graph(ctx: Context) -> None:
     """Serve an interactive topology graph of Containerlab."""
     execute_command(ctx, "docker rm -f clab-graph >/dev/null 2>&1 || true")
     quoted_root = shlex.quote(str(PROJECT_ROOT))
