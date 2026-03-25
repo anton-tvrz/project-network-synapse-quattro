@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import shlex
+
 from invoke import task
 
 from .shared import PROJECT_ROOT, execute_command
@@ -40,14 +42,16 @@ def deps_stop(ctx):
 @task
 def lab_deploy(ctx):
     """Deploy Containerlab topology."""
+    quoted_root = shlex.quote(str(PROJECT_ROOT))
     cmd = (
         "docker run --rm -it --privileged --network host "
         "-v /var/run/docker.sock:/var/run/docker.sock "
         "-v /var/run/netns:/var/run/netns "
         "-v /etc/hosts:/etc/hosts "
         "-v /var/lib/docker/containers:/var/lib/docker/containers "
-        f"-v {PROJECT_ROOT}:{PROJECT_ROOT} -w {PROJECT_ROOT} "
-        f"ghcr.io/srl-labs/clab:latest containerlab deploy --topo {PROJECT_ROOT}/containerlab/topology.clab.yml"
+        f"-v {quoted_root}:{quoted_root} -w {quoted_root} "
+        "ghcr.io/srl-labs/clab:latest containerlab deploy "
+        f"--topo {quoted_root}/containerlab/topology.clab.yml"
     )
     execute_command(ctx, cmd)
 
@@ -55,14 +59,16 @@ def lab_deploy(ctx):
 @task
 def lab_destroy(ctx):
     """Destroy Containerlab topology."""
+    quoted_root = shlex.quote(str(PROJECT_ROOT))
     cmd = (
         "docker run --rm -it --privileged --network host "
         "-v /var/run/docker.sock:/var/run/docker.sock "
         "-v /var/run/netns:/var/run/netns "
         "-v /etc/hosts:/etc/hosts "
         "-v /var/lib/docker/containers:/var/lib/docker/containers "
-        f"-v {PROJECT_ROOT}:{PROJECT_ROOT} -w {PROJECT_ROOT} "
-        f"ghcr.io/srl-labs/clab:latest containerlab destroy --topo {PROJECT_ROOT}/containerlab/topology.clab.yml"
+        f"-v {quoted_root}:{quoted_root} -w {quoted_root} "
+        "ghcr.io/srl-labs/clab:latest containerlab destroy "
+        f"--topo {quoted_root}/containerlab/topology.clab.yml"
     )
     execute_command(ctx, cmd)
 
@@ -70,15 +76,18 @@ def lab_destroy(ctx):
 @task
 def lab_graph(ctx):
     """Serve an interactive topology graph of Containerlab."""
+    execute_command(ctx, "docker rm -f clab-graph >/dev/null 2>&1 || true")
+    quoted_root = shlex.quote(str(PROJECT_ROOT))
     cmd = (
         "docker run -d --rm --name clab-graph --privileged --network host "
         "-v /var/run/docker.sock:/var/run/docker.sock "
         "-v /var/run/netns:/var/run/netns "
         "-v /etc/hosts:/etc/hosts "
         "-v /var/lib/docker/containers:/var/lib/docker/containers "
-        f"-v {PROJECT_ROOT}:{PROJECT_ROOT} -w {PROJECT_ROOT} "
-        f"ghcr.io/srl-labs/clab:latest containerlab graph --topo {PROJECT_ROOT}/containerlab/topology.clab.yml"
+        f"-v {quoted_root}:{quoted_root} -w {quoted_root} "
+        "ghcr.io/srl-labs/clab:latest containerlab graph "
+        f"--topo {quoted_root}/containerlab/topology.clab.yml"
     )
+    execute_command(ctx, cmd)
     print("Serving topology graph on http://localhost:50080")
     print("Run 'docker stop clab-graph' to stop the server.")
-    execute_command(ctx, cmd)

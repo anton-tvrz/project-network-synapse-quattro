@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import os
+
 from invoke import task
+
+from network_synapse.schemas.load_schemas import SCHEMA_LOAD_BATCHES
 
 from .shared import execute_command
 
@@ -54,33 +58,13 @@ def load_schemas(ctx):
     Loads in 3 batches (base -> extensions -> project) to respect dependencies.
     Requires INFRAHUB_ADDRESS and INFRAHUB_API_TOKEN env vars (set in .env).
     """
-    batches = [
-        (
-            "base",
-            [
-                "library/schema-library/base/organization.yml",
-                "library/schema-library/base/location.yml",
-                "library/schema-library/base/ipam.yml",
-                "library/schema-library/base/dcim.yml",
-            ],
-        ),
-        (
-            "extensions",
-            [
-                "library/schema-library/extensions/vrf/vrf.yml",
-                "library/schema-library/extensions/routing/routing.yml",
-                "library/schema-library/extensions/routing_bgp/bgp.yml",
-            ],
-        ),
-        (
-            "project",
-            [
-                "backend/network_synapse/schemas/network_device.yml",
-                "backend/network_synapse/schemas/network_interface.yml",
-            ],
-        ),
-    ]
-    for name, files in batches:
+    required_vars = ["INFRAHUB_ADDRESS", "INFRAHUB_API_TOKEN"]
+    missing = [v for v in required_vars if not os.getenv(v)]
+    if missing:
+        raise RuntimeError(f"Missing required env vars: {', '.join(missing)}. See .env.example")
+
+    batch_names = ["base", "extensions", "project"]
+    for name, files in zip(batch_names, SCHEMA_LOAD_BATCHES, strict=True):
         file_args = " ".join(files)
         print(f"\n📦 Loading {name} schemas...")
         execute_command(ctx, f"infrahubctl schema load {file_args}")
