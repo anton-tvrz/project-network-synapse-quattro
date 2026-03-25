@@ -188,9 +188,11 @@ docker compose -f development/docker-compose-deps.yml up -d temporal
 1. **Access SR Linux CLI via docker exec:**
 
    ```bash
-   docker exec -it clab-spine-leaf-lab-spine01 sr_cli   # spine01
+   docker exec -it clab-spine-leaf-lab-spine01 sr_cli    # spine01
    docker exec -it clab-spine-leaf-lab-leaf01 sr_cli     # leaf01
    docker exec -it clab-spine-leaf-lab-leaf02 sr_cli     # leaf02
+   # Linux Testing Clients
+   docker exec -it clab-spine-leaf-lab-client1 /bin/bash # client1
    ```
 
 2. **Alternatively, SSH directly (OrbStack makes 172.20.20.x reachable):**
