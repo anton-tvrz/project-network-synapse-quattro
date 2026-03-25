@@ -102,8 +102,9 @@ git submodule update --init --recursive
 ```bash
 cp .env.example .env
 
-# Edit .env and fill in required values:
-# - INFRAHUB_TOKEN (generated after Infrahub first login in Step 5)
+# The default Infrahub admin token is pre-configured in .env.example:
+# INFRAHUB_API_TOKEN=06438eb2-8019-4776-878c-0941b1f1d1ec
+# No manual token creation needed.
 ```
 
 ### 3.4 Install Python Dependencies
@@ -150,21 +151,22 @@ ls backend/ workers/ tests/ tasks/ dev/ development/ containerlab/
 
 ## Step 4: Start Infrastructure
 
-**Purpose:** Start the infrastructure stack (Infrahub, Temporal, Neo4j, Redis, RabbitMQ)
-via Docker Compose. OrbStack runs containers with near-native performance on Apple Silicon.
+**Purpose:** Start the full infrastructure stack (12 containers) via Docker Compose.
+OrbStack runs containers with near-native performance on Apple Silicon.
 
-### 4.1 Start Infrastructure
+### 4.1 Start All Infrastructure Containers
 
 ```bash
 uv run invoke dev.deps
 ```
 
-This runs `docker compose -f development/docker-compose-deps.yml up -d` under the hood.
+This runs `docker compose -f development/docker-compose-deps.yml up -d` under the hood,
+starting all 12 containers (~10GB total memory reserved).
 
 ### 4.2 Wait for Services to Initialize
 
-Infrahub takes 30-90 seconds to fully initialize (Neo4j must be ready first, then
-Infrahub applies migrations).
+Infrahub takes 60-90 seconds to fully initialize (Neo4j and the task-manager must be
+ready first, then Infrahub applies migrations).
 
 ```bash
 # Watch container status until all are running
@@ -182,29 +184,53 @@ for i in $(seq 1 24); do
 done
 ```
 
-### Services Reference
+### Services Reference (12 containers total)
+
+**Infrahub Stack (7 containers):**
 
 | Service | Container | Port | Health Check |
 | --- | --- | --- | --- |
 | Neo4j | infrahub-database | 7687, 7474 | `curl http://localhost:7474` |
 | Redis | infrahub-cache | 6379 | `docker exec <id> redis-cli ping` |
 | RabbitMQ | infrahub-message-queue | 5672, 15672 | `curl http://localhost:15672` (guest/guest) |
-| Infrahub | infrahub-server | 8000 | `curl http://localhost:8000` |
+| PostgreSQL | task-manager-db | 5433 | Task manager database |
+| Task Manager | task-manager | 4200 | `curl http://localhost:4200` (Prefect API) |
+| Infrahub Server | infrahub-server | 8000 | `curl http://localhost:8000` |
+| Task Worker | task-worker | -- | Background task processor |
+
+**Temporal Stack (3 containers):**
+
+| Service | Container | Port | Health Check |
+| --- | --- | --- | --- |
+| PostgreSQL | temporal-db | 5432 | Temporal persistence |
 | Temporal | temporal | 7233 | `curl http://localhost:8080` (via UI) |
 | Temporal UI | temporal-ui | 8080 | `curl http://localhost:8080` |
+
+**Observability (2 containers):**
+
+| Service | Container | Port | Health Check |
+| --- | --- | --- | --- |
+| Prometheus | prometheus | 9090 | `curl http://localhost:9090` |
+| Grafana | grafana | 3000 | `curl http://localhost:3000` (admin/synapse) |
+
+> **Note:** SuzieQ is commented out in docker-compose (broken on Apple Silicon).
 
 ### Verification
 
 ```bash
-# All 6 containers running
+# All 12 containers running
 docker compose -f development/docker-compose-deps.yml ps | grep -c "running"
-# Expect: 6
+# Expect: 12
 
 # Infrahub API responds
 curl -s http://localhost:8000 | head -c 200
 
 # Temporal UI responds
 curl -s -o /dev/null -w "%{http_code}" http://localhost:8080
+# Expect: 200
+
+# Task Manager (Prefect API) responds
+curl -s -o /dev/null -w "%{http_code}" http://localhost:4200/api/health
 # Expect: 200
 ```
 
@@ -216,6 +242,8 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:8080
 | Neo4j OOM killed | Set `NEO4J_server_memory_heap_max__size=1G` in compose environment |
 | Port conflict | Check: `lsof -i :<PORT>`. Override port in `.env` |
 | Infrahub stuck starting | Check logs: `docker compose -f development/docker-compose-deps.yml logs infrahub-server --tail 50` |
+| Not enough memory | All 12 containers reserve ~10GB total. Ensure sufficient RAM available. |
+| Task-manager not starting | Ensure task-manager-db (postgres) is healthy first. Check logs: `docker compose -f development/docker-compose-deps.yml logs task-manager --tail 50` |
 
 ---
 
@@ -226,12 +254,35 @@ config generation pipeline works.
 
 ### 5.1 Load Schemas into Infrahub
 
+The default admin API token is pre-configured in `.env.example`
+(`06438eb2-8019-4776-878c-0941b1f1d1ec`). No manual token creation is needed.
+
+**Option A: Use the invoke task (recommended):**
+
 ```bash
 uv run invoke backend.load-schemas
 ```
 
-This loads schema YAML files from `backend/network_synapse/schemas/` into Infrahub
-via the `/api/schema/load` endpoint.
+**Option B: Use `infrahubctl` CLI directly:**
+
+```bash
+export INFRAHUB_ADDRESS=http://localhost:8000
+export INFRAHUB_API_TOKEN=06438eb2-8019-4776-878c-0941b1f1d1ec
+
+# Load base schemas from the schema-library submodule
+uv run infrahubctl schema load library/schema-library/base/*.yml
+
+# Load routing extensions
+uv run infrahubctl schema load \
+  library/schema-library/extensions/vrf/vrf.yml \
+  library/schema-library/extensions/routing/routing.yml \
+  library/schema-library/extensions/routing_bgp/bgp.yml
+
+# Load project-specific schemas
+uv run infrahubctl schema load \
+  backend/network_synapse/schemas/network_device.yml \
+  backend/network_synapse/schemas/network_interface.yml
+```
 
 ### 5.2 Seed Network Topology Data
 
@@ -256,13 +307,6 @@ uv run invoke backend.generate-configs --dry-run
 uv run invoke backend.generate-configs
 ```
 
-### 5.4 Generate Infrahub API Token
-
-1. Open http://localhost:8000 in your browser
-2. Login: admin / infrahub
-3. Navigate to: Account Settings -> API Tokens -> Create Token
-4. Copy the token and add it to `.env` as `INFRAHUB_TOKEN=<token>`
-
 ### Verification
 
 ```bash
@@ -282,10 +326,11 @@ ls generated-configs/
 
 | Issue | Fix |
 | --- | --- |
-| `load-schemas` fails with connection error | Verify Infrahub is running: `curl http://localhost:8000` |
+| `load-schemas` fails with connection error | Verify Infrahub is running: `curl http://localhost:8000`. Infrahub needs 60-90s after startup. |
 | `seed-data` fails with 409 conflict | Data already exists. If persistent, restart with fresh volumes: `docker compose -f development/docker-compose-deps.yml down -v && uv run invoke dev.deps` |
 | `generate-configs` can't connect | Ensure `INFRAHUB_URL=http://localhost:8000` in `.env` |
 | GraphQL query returns empty | Schemas not loaded -- run `load-schemas` before `seed-data` |
+| `infrahubctl` auth error | Ensure `INFRAHUB_API_TOKEN=06438eb2-8019-4776-878c-0941b1f1d1ec` is set (default admin token) |
 
 ---
 
@@ -414,12 +459,12 @@ uv run invoke backend.generate-configs --dry-run
 
 ---
 
-## Step 8: Observability (Optional)
+## Step 8: Observability
 
-**Purpose:** Set up Grafana and Prometheus for monitoring.
+**Purpose:** Grafana and Prometheus for monitoring.
 
-If the Docker Compose stack includes Grafana and Prometheus containers, they will be
-available at:
+Grafana and Prometheus are included in the 12-container stack started by `uv run invoke dev.deps`
+(Step 4). No additional setup is needed.
 
 | Service | URL | Credentials |
 | --- | --- | --- |
@@ -480,5 +525,8 @@ All services are accessible on localhost:
 | --- | --- | --- |
 | Infrahub UI | http://localhost:8000 | admin / infrahub |
 | Temporal UI | http://localhost:8080 | (no auth) |
+| Task Manager (Prefect) | http://localhost:4200 | (no auth) |
 | Neo4j Browser | http://localhost:7474 | neo4j / infrahub |
 | RabbitMQ Mgmt | http://localhost:15672 | guest / guest |
+| Grafana | http://localhost:3000 | admin / synapse |
+| Prometheus | http://localhost:9090 | (no auth) |

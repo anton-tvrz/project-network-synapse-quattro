@@ -40,10 +40,45 @@ def deps_stop(ctx):
 @task
 def lab_deploy(ctx):
     """Deploy Containerlab topology."""
-    execute_command(ctx, f"sudo containerlab deploy --topo {PROJECT_ROOT}/containerlab/topology.clab.yml")
+    cmd = (
+        "docker run --rm -it --privileged --network host "
+        "-v /var/run/docker.sock:/var/run/docker.sock "
+        "-v /var/run/netns:/var/run/netns "
+        "-v /etc/hosts:/etc/hosts "
+        "-v /var/lib/docker/containers:/var/lib/docker/containers "
+        f"-v {PROJECT_ROOT}:{PROJECT_ROOT} -w {PROJECT_ROOT} "
+        f"ghcr.io/srl-labs/clab:latest containerlab deploy --topo {PROJECT_ROOT}/containerlab/topology.clab.yml"
+    )
+    execute_command(ctx, cmd)
 
 
 @task
 def lab_destroy(ctx):
     """Destroy Containerlab topology."""
-    execute_command(ctx, f"sudo containerlab destroy --topo {PROJECT_ROOT}/containerlab/topology.clab.yml")
+    cmd = (
+        "docker run --rm -it --privileged --network host "
+        "-v /var/run/docker.sock:/var/run/docker.sock "
+        "-v /var/run/netns:/var/run/netns "
+        "-v /etc/hosts:/etc/hosts "
+        "-v /var/lib/docker/containers:/var/lib/docker/containers "
+        f"-v {PROJECT_ROOT}:{PROJECT_ROOT} -w {PROJECT_ROOT} "
+        f"ghcr.io/srl-labs/clab:latest containerlab destroy --topo {PROJECT_ROOT}/containerlab/topology.clab.yml"
+    )
+    execute_command(ctx, cmd)
+
+
+@task
+def lab_graph(ctx):
+    """Serve an interactive topology graph of Containerlab."""
+    cmd = (
+        "docker run -d --rm --name clab-graph --privileged --network host "
+        "-v /var/run/docker.sock:/var/run/docker.sock "
+        "-v /var/run/netns:/var/run/netns "
+        "-v /etc/hosts:/etc/hosts "
+        "-v /var/lib/docker/containers:/var/lib/docker/containers "
+        f"-v {PROJECT_ROOT}:{PROJECT_ROOT} -w {PROJECT_ROOT} "
+        f"ghcr.io/srl-labs/clab:latest containerlab graph --topo {PROJECT_ROOT}/containerlab/topology.clab.yml"
+    )
+    print("Serving topology graph on http://localhost:50080")
+    print("Run 'docker stop clab-graph' to stop the server.")
+    execute_command(ctx, cmd)

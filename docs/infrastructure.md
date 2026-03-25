@@ -9,7 +9,7 @@ This document covers how to connect to all services running locally on macOS wit
 | **Machine** | MacBook M5, 32GB RAM |
 | **Container Runtime** | OrbStack |
 | **Branch** | `main` |
-| **Services** | Infrahub, Temporal, Containerlab, synapse-worker |
+| **Services** | Infrahub (7 containers), Temporal (3 containers), Observability (2 containers), Containerlab, synapse-worker |
 
 All services run locally. No SSH tunnels, no cloud VMs, no remote access needed.
 
@@ -206,7 +206,22 @@ The Infrahub instance is pre-populated with:
 
 See [seed-data.md](seed-data.md) for the full IP addressing plan.
 
-### Docker Containers
+### Docker Containers (Infrahub Stack -- 7 containers)
+
+The Infrahub stack consists of 7 containers:
+
+| Container | Role | Port |
+|-----------|------|------|
+| infrahub-database (neo4j) | Graph database | 7474, 7687 |
+| infrahub-cache (redis) | Cache layer | 6379 |
+| infrahub-message-queue (rabbitmq) | Message broker | 5672, 15672 |
+| task-manager-db (postgres) | Task manager persistence | 5433 |
+| task-manager | Prefect-based task orchestration | 4200 |
+| infrahub-server | Infrahub API + UI | 8000 |
+| task-worker | Background task processor | -- |
+
+The default admin API token (`06438eb2-8019-4776-878c-0941b1f1d1ec`) is pre-configured.
+No manual token creation via the UI is needed.
 
 ```bash
 # Check Infrahub container status
@@ -217,7 +232,13 @@ docker compose -f development/docker-compose-deps.yml logs -f infrahub-server
 
 # Restart
 docker compose -f development/docker-compose-deps.yml restart infrahub-server
+
+# Task Manager (Prefect API)
+curl http://localhost:4200/api/health
 ```
+
+> **Note:** Infrahub takes 60-90s to fully initialize (Neo4j + task-manager must be ready first).
+> SuzieQ is commented out in docker-compose (broken on Apple Silicon).
 
 ---
 
@@ -268,7 +289,13 @@ The worker reads the Temporal address from an environment variable:
 export TEMPORAL_ADDRESS="localhost:7233"  # default
 ```
 
-### Docker Containers
+### Docker Containers (Temporal Stack -- 3 containers)
+
+| Container | Role | Port |
+|-----------|------|------|
+| temporal-db (postgres) | Temporal persistence | 5432 |
+| temporal | Workflow engine | 7233 |
+| temporal-ui | Web dashboard | 8080 |
 
 ```bash
 # Check Temporal container status
@@ -284,6 +311,36 @@ docker exec temporal temporal operator cluster health
 
 ---
 
+## Observability (2 containers)
+
+Prometheus and Grafana are included in the docker-compose stack started by `uv run invoke dev.deps`.
+
+| Service | URL | Credentials |
+|---------|-----|-------------|
+| Prometheus | http://localhost:9090 | (no auth) |
+| Grafana | http://localhost:3000 | admin / synapse |
+
+```bash
+# Check observability containers
+docker ps --filter "name=prometheus"
+docker ps --filter "name=grafana"
+```
+
+---
+
+## Container Summary
+
+All 12 containers are started by `uv run invoke dev.deps` (~10GB total memory reserved):
+
+| Stack | Containers | Count |
+|-------|-----------|-------|
+| Infrahub | neo4j, redis, rabbitmq, task-manager-db (postgres), task-manager, infrahub-server, task-worker | 7 |
+| Temporal | postgres, temporal, temporal-ui | 3 |
+| Observability | prometheus, grafana | 2 |
+| **Total** | | **12** |
+
+---
+
 ## Port Reference
 
 All services listen on `localhost` and are directly accessible from macOS.
@@ -294,6 +351,9 @@ OrbStack container IPs (172.20.20.x) are also directly routable from the host.
 | 8000 | Infrahub Web UI + API | HTTP | http://localhost:8000 |
 | 8080 | Temporal Web UI | HTTP | http://localhost:8080 |
 | 7233 | Temporal gRPC | gRPC | localhost:7233 |
+| 4200 | Task Manager (Prefect API) | HTTP | http://localhost:4200 |
+| 3000 | Grafana | HTTP | http://localhost:3000 |
+| 9090 | Prometheus | HTTP | http://localhost:9090 |
 | 443 | SR Linux JSON-RPC (per device) | HTTPS | https://172.20.20.x |
 | 57400 | SR Linux gNMI (per device) | gRPC/TLS | 172.20.20.x:57400 |
 | 50080 | Containerlab Graph UI | HTTP | http://localhost:50080 |
@@ -301,6 +361,7 @@ OrbStack container IPs (172.20.20.x) are also directly routable from the host.
 | 7474 | Neo4j Browser | HTTP | http://localhost:7474 |
 | 7687 | Neo4j Bolt | Bolt | localhost:7687 |
 | 5432 | PostgreSQL (Temporal) | TCP | localhost:5432 |
+| 5433 | PostgreSQL (Task Manager) | TCP | localhost:5433 |
 | 15672 | RabbitMQ Management | HTTP | http://localhost:15672 |
 
 ---

@@ -48,9 +48,42 @@ def generate_configs(ctx, device="all", url="", output_dir="", dry_run=False):
 
 
 @task
-def load_schemas(ctx, url="http://localhost:8000"):
-    """Load schemas into Infrahub."""
-    execute_command(ctx, f"python backend/network_synapse/schemas/load_schemas.py --url {url}")
+def load_schemas(ctx):
+    """Load schemas into Infrahub via infrahubctl.
+
+    Loads in 3 batches (base -> extensions -> project) to respect dependencies.
+    Requires INFRAHUB_ADDRESS and INFRAHUB_API_TOKEN env vars (set in .env).
+    """
+    batches = [
+        (
+            "base",
+            [
+                "library/schema-library/base/organization.yml",
+                "library/schema-library/base/location.yml",
+                "library/schema-library/base/ipam.yml",
+                "library/schema-library/base/dcim.yml",
+            ],
+        ),
+        (
+            "extensions",
+            [
+                "library/schema-library/extensions/vrf/vrf.yml",
+                "library/schema-library/extensions/routing/routing.yml",
+                "library/schema-library/extensions/routing_bgp/bgp.yml",
+            ],
+        ),
+        (
+            "project",
+            [
+                "backend/network_synapse/schemas/network_device.yml",
+                "backend/network_synapse/schemas/network_interface.yml",
+            ],
+        ),
+    ]
+    for name, files in batches:
+        file_args = " ".join(files)
+        print(f"\n📦 Loading {name} schemas...")
+        execute_command(ctx, f"infrahubctl schema load {file_args}")
 
 
 @task
