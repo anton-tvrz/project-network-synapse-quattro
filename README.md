@@ -122,6 +122,7 @@ uv run invoke dev.deps            # Start infrastructure dependencies
 - Underlay: eBGP on `/31` point-to-point links
 
 **Accessing Nodes (from macOS terminal):**
+
 ```bash
 # Log straight into the Nokia SR Linux CLI (no password needed!)
 docker exec -it clab-spine-leaf-lab-spine01 sr_cli
