@@ -252,9 +252,12 @@ def main():
                         print(f"  ✅ Batch {batch_idx}: All schemas loaded successfully")
                     batch_success += 1
                 else:
-                    error_detail = response.json()
                     print(f"  ❌ Batch {batch_idx}: HTTP {response.status_code}")
-                    print(f"     {json.dumps(error_detail, indent=2)}")
+                    try:
+                        error_detail = response.json()
+                        print(f"     {json.dumps(error_detail, indent=2)}")
+                    except ValueError:
+                        print(f"     {response.text[:500]}")
                     batch_fail += 1
                     print(f"\n🛑 Stopping due to failure in batch {batch_idx}")
                     break

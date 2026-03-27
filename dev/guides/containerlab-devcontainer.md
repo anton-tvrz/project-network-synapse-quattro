@@ -4,7 +4,7 @@ To allow our local development containers (like `synapse-worker` and `infrahub-s
 
 ## Architecture
 
-```
+```text
 macOS Host
 └── OrbStack Docker Engine
     ├── Infrahub Server
@@ -14,6 +14,7 @@ macOS Host
     ├── clab-spine-leaf-lab-leaf01  (Nokia SR Linux)
     └── clab-spine-leaf-lab-leaf02  (Nokia SR Linux)
 ```
+
 *Notice that all components share the same Docker Engine!*
 
 ## Lifecycle Management
@@ -42,9 +43,12 @@ docker exec -it clab-spine-leaf-lab-leaf01 sr_cli
 *(No password needed!)*
 
 ### From Local Docker Containers (like Python Workers)
+
 Any container that needs to talk to the switches can do so. For example, if your Temporal worker runs in the `development_default` network, you can bridge it to the `clab` network:
+
 ```bash
-docker network connect clab development-synapse-worker-1
+docker network connect clab development_synapse-worker_1
 ```
+
 Then, the worker can reach the switch via DNS:
 `clab-spine-leaf-lab-spine01`

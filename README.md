@@ -43,9 +43,6 @@ uv run invoke workers.start
 
 # Deploy the network lab (switches)
 uv run invoke dev.lab-deploy
-
-# Start the Temporal worker
-uv run invoke workers.start
 ```
 
 ## Platform Management

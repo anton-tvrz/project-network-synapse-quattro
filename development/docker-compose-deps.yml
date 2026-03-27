@@ -23,8 +23,8 @@ x-infrahub-env: &infrahub-env
   INFRAHUB_BROKER_PASSWORD: guest
   INFRAHUB_WORKFLOW_ADDRESS: infrahub-task-manager
   INFRAHUB_WORKFLOW_PORT: 4200
-  INFRAHUB_INITIAL_ADMIN_TOKEN: 06438eb2-8019-4776-878c-0941b1f1d1ec
-  INFRAHUB_INITIAL_AGENT_TOKEN: 44af444d-3b26-410d-9546-b758657e026c
+  INFRAHUB_INITIAL_ADMIN_TOKEN: ${INFRAHUB_INITIAL_ADMIN_TOKEN:-06438eb2-8019-4776-878c-0941b1f1d1ec}
+  INFRAHUB_INITIAL_AGENT_TOKEN: ${INFRAHUB_INITIAL_AGENT_TOKEN:-44af444d-3b26-410d-9546-b758657e026c}
   PREFECT_API_URL: http://infrahub-task-manager:4200/api
 
 services:
@@ -83,6 +83,11 @@ services:
       POSTGRES_DB: prefect
     volumes:
       - infrahub_task_manager_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prefect"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     deploy:
       resources:
         limits:
@@ -95,7 +100,8 @@ services:
       uvicorn --host 0.0.0.0 --port 4200
       --factory infrahub.prefect_server.app:create_infrahub_prefect
     depends_on:
-      - infrahub-task-manager-db
+      infrahub-task-manager-db:
+        condition: service_healthy
     environment:
       <<: *infrahub-env
       PREFECT_API_DATABASE_CONNECTION_URL: "postgresql+asyncpg://prefect:prefect@infrahub-task-manager-db:5432/prefect"
@@ -135,7 +141,7 @@ services:
       <<: *infrahub-env
       INFRAHUB_ADDRESS: http://infrahub-server:8000
       INFRAHUB_INTERNAL_ADDRESS: http://infrahub-server:8000
-      INFRAHUB_API_TOKEN: 44af444d-3b26-410d-9546-b758657e026c
+      INFRAHUB_API_TOKEN: ${INFRAHUB_INITIAL_AGENT_TOKEN:-44af444d-3b26-410d-9546-b758657e026c}
     deploy:
       resources:
         limits:
@@ -153,6 +159,11 @@ services:
       POSTGRES_DB: temporal
     volumes:
       - temporal_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     deploy:
       resources:
         limits:
@@ -162,7 +173,8 @@ services:
   temporal:
     image: temporalio/auto-setup:latest
     depends_on:
-      - temporal-db
+      temporal-db:
+        condition: service_healthy
     environment:
       DB: postgres12
       DB_PORT: 5432
