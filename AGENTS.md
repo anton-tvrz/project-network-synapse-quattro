@@ -226,17 +226,27 @@ This project follows the **Context Nuggets** pattern (ADR-0001) for developer do
 
 ## Infrastructure
 
-All services run locally via Docker Compose + OrbStack:
+All services run locally via Docker Compose + OrbStack. `uv run invoke dev.deps` starts
+12 containers (~10GB total memory reserved):
 
-| Component          | Local Port | Description            |
-| ------------------ | ---------- | ---------------------- |
-| Infrahub           | 8000       | Web UI + GraphQL API   |
-| Temporal           | 7233       | gRPC endpoint          |
-| Temporal UI        | 8080       | Web dashboard          |
-| Grafana            | 3000       | Dashboards             |
-| Prometheus         | 9090       | Metrics + alerts       |
-| SR Linux (gNMI)    | 57400      | Per-device gNMI        |
-| Containerlab Graph | 50080      | Topology visualization |
+- **Infrahub stack (7):** neo4j, redis, rabbitmq, task-manager-db (postgres), task-manager, infrahub-server, task-worker
+- **Temporal stack (3):** postgres, temporal, temporal-ui
+- **Observability (2):** prometheus, grafana
+
+Infrahub takes 60-90s to fully initialize (Neo4j + task-manager must be ready first).
+The default admin API token (`06438eb2-8019-4776-878c-0941b1f1d1ec`) is pre-configured in `.env.example`.
+SuzieQ is commented out (broken on Apple Silicon).
+
+| Component          | Local Port | Description                |
+| ------------------ | ---------- | -------------------------- |
+| Infrahub           | 8000       | Web UI + GraphQL API       |
+| Task Manager       | 4200       | Prefect API                |
+| Temporal           | 7233       | gRPC endpoint              |
+| Temporal UI        | 8080       | Web dashboard              |
+| Grafana            | 3000       | Dashboards                 |
+| Prometheus         | 9090       | Metrics + alerts           |
+| SR Linux (gNMI)    | 57400      | Per-device gNMI            |
+| Containerlab Graph | 50080      | Topology visualization     |
 
 ## Lab Topology
 

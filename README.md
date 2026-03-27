@@ -40,7 +40,27 @@ uv run invoke backend.seed-data
 
 # Start the Temporal worker
 uv run invoke workers.start
+
+# Deploy the network lab (switches)
+uv run invoke dev.lab-deploy
 ```
+
+## Platform Management
+
+The platform is designed to be brought up and down cleanly using the `invoke` tasks:
+
+### 🟢 Starting Up
+1. `uv run invoke dev.deps` (Starts Infrahub, Temporal, Telemetry)
+2. `uv run invoke dev.lab-deploy` (Deploys Containerlab switches)
+3. `uv run invoke workers.start` (Starts your Python orchestration workers)
+
+### 🔴 Shutting Down
+When finished, tear down the environment to free up resources:
+1. Stop your python worker (`Ctrl+C` in its terminal)
+2. `uv run invoke dev.lab-destroy` (Destroys the network lab)
+3. `uv run invoke dev.deps-stop` (Stops the infrastructure containers)
+
+*(All databases and telemetry data are saved in persistent Docker volumes and will survive restarts).*
 
 ## Project Structure
 
@@ -91,13 +111,21 @@ uv run invoke dev.deps            # Start infrastructure dependencies
 
 ## Lab Topology
 
-3-node Nokia SR Linux spine-leaf fabric running locally via Containerlab:
+3-node Nokia SR Linux spine-leaf fabric running via Containerlab natively on OrbStack using a Docker-containerized deployment approach (DooD):
 
 - **spine01** (IXR-D3, AS65000) -- 4 fabric links
 - **leaf01** (IXR-D2, AS65001) -- 2 uplinks
 - **leaf02** (IXR-D2, AS65002) -- 2 uplinks
-- Management: `172.20.20.0/24` (directly accessible from macOS via OrbStack)
 - Underlay: eBGP on `/31` point-to-point links
+
+**Accessing Nodes (from macOS terminal):**
+
+```bash
+# Log straight into the Nokia SR Linux CLI (no password needed!)
+docker exec -it clab-spine-leaf-lab-spine01 sr_cli
+```
+
+*See `dev/guides/containerlab-devcontainer.md` for full Containerlab management instructions.*
 
 ## Contributing
 

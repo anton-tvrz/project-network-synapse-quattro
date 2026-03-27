@@ -46,6 +46,7 @@ dev = [
     "ipython>=8.0",
     "towncrier>=24.8",
     "bandit[toml]>=1.7",
+    "bandit-sarif-formatter>=1.1.1",
     "detect-secrets>=1.5",
 ]
 

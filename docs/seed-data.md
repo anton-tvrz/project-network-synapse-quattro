@@ -2,32 +2,41 @@
 
 This document describes the seed data populated into Infrahub for the Synapse spine-leaf lab.
 
-Source file: `infrahub/data/seed_data.yml`
-Loader script: `infrahub/data/populate_sot.py`
+Source file: `backend/network_synapse/data/seed_data.yml`
+
+## Loading Schemas
+
+Schemas must be loaded before seeding data. Use `infrahubctl` CLI or the invoke task:
+
+```bash
+# Option A: invoke task (recommended)
+uv run invoke backend.load-schemas
+
+# Option B: infrahubctl CLI directly
+export INFRAHUB_ADDRESS=http://localhost:8000
+export INFRAHUB_API_TOKEN=06438eb2-8019-4776-878c-0941b1f1d1ec
+uv run infrahubctl schema load library/schema-library/base/*.yml
+uv run infrahubctl schema load \
+  library/schema-library/extensions/vrf/vrf.yml \
+  library/schema-library/extensions/routing/routing.yml \
+  library/schema-library/extensions/routing_bgp/bgp.yml
+uv run infrahubctl schema load \
+  backend/network_synapse/schemas/network_device.yml \
+  backend/network_synapse/schemas/network_interface.yml
+```
 
 ## Running the Seed Script
 
 ```bash
 # Load seed data into Infrahub
-python infrahub/data/populate_sot.py \
-  --url http://localhost:8000 \
-  --seed-file infrahub/data/seed_data.yml
-
-# Dry run (parse only)
-python infrahub/data/populate_sot.py --dry-run
-
-# With resource pools (dynamic IP/ASN allocation)
-python infrahub/data/populate_sot.py \
-  --url http://localhost:8000 \
-  --with-pools \
-  --pool-file infrahub/data/pool_definitions.yml
+uv run invoke backend.seed-data
 ```
 
-The script is idempotent — it checks for existing objects before creating and can be safely re-run.
+The script is idempotent -- it checks for existing objects before creating and can be safely re-run.
 
-### `--with-pools` Flag
+### Resource Pools (Optional)
 
-When `--with-pools` is specified, the seed script additionally:
+The seed script can optionally create resource pools for dynamic IP/ASN allocation:
 
 1. Creates IP prefix supernets (e.g., `10.0.0.0/16`, `10.1.0.0/24`)
 2. Creates resource pools referencing those prefixes
@@ -146,7 +155,7 @@ All sessions are eBGP (`EXTERNAL`) with role `backbone` in the default VRF.
 
 ## Object Creation Order
 
-The `populate_sot.py` script creates objects in strict dependency order:
+The seed script creates objects in strict dependency order:
 
 1. OrganizationManufacturer (Nokia)
 2. LocationSite (Local Lab)

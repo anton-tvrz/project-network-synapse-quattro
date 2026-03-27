@@ -33,13 +33,31 @@ except ImportError:
 
 
 # Schema files to load in order (paths relative to project root)
-SCHEMA_LOAD_ORDER = [
-    "library/schema-library/extensions/vrf/vrf.yml",
-    "library/schema-library/extensions/routing/routing.yml",
-    "library/schema-library/extensions/routing_bgp/bgp.yml",
-    "backend/network_synapse/schemas/network_device.yml",
-    "backend/network_synapse/schemas/network_interface.yml",
+# Schema load batches — files in same batch are loaded in a single API call
+# to resolve circular dependencies within the batch.
+SCHEMA_LOAD_BATCHES = [
+    # Batch 1: All base schemas (have circular refs between org <-> dcim)
+    [
+        "library/schema-library/base/organization.yml",
+        "library/schema-library/base/location.yml",
+        "library/schema-library/base/ipam.yml",
+        "library/schema-library/base/dcim.yml",
+    ],
+    # Batch 2: Extensions (depend on base schemas)
+    [
+        "library/schema-library/extensions/vrf/vrf.yml",
+        "library/schema-library/extensions/routing/routing.yml",
+        "library/schema-library/extensions/routing_bgp/bgp.yml",
+    ],
+    # Batch 3: Project-specific schemas (depend on base + extensions)
+    [
+        "backend/network_synapse/schemas/network_device.yml",
+        "backend/network_synapse/schemas/network_interface.yml",
+    ],
 ]
+
+# Flat list for backward compatibility
+SCHEMA_LOAD_ORDER = [f for batch in SCHEMA_LOAD_BATCHES for f in batch]
 
 
 def get_project_root() -> Path:
@@ -148,6 +166,7 @@ def verify_schema_loaded(client: "httpx.Client", base_url: str) -> None:
         print(f"\n⚠  Could not verify schemas: {e}")
 
 
+# ruff: noqa: PLR0912
 def main():
     parser = argparse.ArgumentParser(description="Load Infrahub schemas for Synapse project")
     parser.add_argument(
@@ -193,27 +212,66 @@ def main():
         print("\n🏁 Dry run complete. All schema files parsed successfully.")
         return
 
-    # Load schemas into Infrahub
+    # Load schemas into Infrahub in batches
     print(f"\n🚀 Loading schemas into Infrahub at {args.url}...\n")
-    success_count = 0
-    fail_count = 0
+    batch_success = 0
+    batch_fail = 0
 
     with httpx.Client(headers=headers) as client:
-        for schema_path, schema_data in schemas:
-            name = Path(schema_path).stem
-            if load_schema_into_infrahub(client, args.url, schema_data, name):
-                success_count += 1
-            else:
-                fail_count += 1
-                print(f"\n🛑 Stopping due to failure loading {name}")
+        for batch_idx, batch_files in enumerate(SCHEMA_LOAD_BATCHES, 1):
+            batch_schemas = []
+            batch_names = []
+            for schema_path in batch_files:
+                filepath = project_root / schema_path
+                schema_data = load_yaml_file(filepath)
+                # Only include schemas with actual content
+                has_nodes = "nodes" in schema_data and schema_data["nodes"]
+                has_generics = "generics" in schema_data and schema_data["generics"]
+                has_extensions = "extensions" in schema_data and schema_data["extensions"]
+                if has_nodes or has_generics or has_extensions:
+                    batch_schemas.append(schema_data)
+                    batch_names.append(Path(schema_path).stem)
+
+            if not batch_schemas:
+                print(f"  ⏭  Batch {batch_idx}: No schemas to load, skipping")
+                continue
+
+            print(f"  📦 Batch {batch_idx}: Loading {', '.join(batch_names)}...")
+            url = f"{args.url}/api/schema/load"
+            payload = {"schemas": batch_schemas}
+
+            try:
+                response = client.post(url, json=payload, timeout=180.0)
+                if response.status_code == 200:
+                    result = response.json()
+                    if result.get("errors"):
+                        print(f"  ⚠  Batch {batch_idx}: Loaded with warnings:")
+                        for err in result["errors"]:
+                            print(f"     {err.get('message', err)}")
+                    else:
+                        print(f"  ✅ Batch {batch_idx}: All schemas loaded successfully")
+                    batch_success += 1
+                else:
+                    print(f"  ❌ Batch {batch_idx}: HTTP {response.status_code}")
+                    try:
+                        error_detail = response.json()
+                        print(f"     {json.dumps(error_detail, indent=2)}")
+                    except ValueError:
+                        print(f"     {response.text[:500]}")
+                    batch_fail += 1
+                    print(f"\n🛑 Stopping due to failure in batch {batch_idx}")
+                    break
+            except httpx.RequestError as e:
+                print(f"  ❌ Batch {batch_idx}: Connection error: {e}")
+                batch_fail += 1
                 break
 
         # Verify
-        if fail_count == 0:
+        if batch_fail == 0:
             verify_schema_loaded(client, args.url)
 
-    print(f"\n🏁 Done: {success_count} loaded, {fail_count} failed")
-    sys.exit(1 if fail_count > 0 else 0)
+    print(f"\n🏁 Done: {batch_success} batches loaded, {batch_fail} failed")
+    sys.exit(1 if batch_fail > 0 else 0)
 
 
 if __name__ == "__main__":
