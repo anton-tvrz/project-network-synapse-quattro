@@ -109,11 +109,7 @@ services:
 
   infrahub-server:
     image: registry.opsmill.io/opsmill/infrahub:stable
-    command: >
-      gunicorn --bind 0.0.0.0:8000
-      -k uvicorn.workers.UvicornWorker
-      -w 2 --timeout 300
-      infrahub.server:app
+    command: infrahub server start
     depends_on:
       - infrahub-database
       - infrahub-cache

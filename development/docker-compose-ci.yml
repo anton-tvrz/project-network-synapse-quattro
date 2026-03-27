@@ -38,6 +38,9 @@ services:
       INFRAHUB_CACHE_PORT: 6379
       INFRAHUB_BROKER_ADDRESS: infrahub-message-queue
       INFRAHUB_BROKER_PORT: 5672
+      INFRAHUB_BROKER_USERNAME: guest
+      INFRAHUB_BROKER_PASSWORD: guest
+    command: infrahub server start
     ports:
       - "8000:8000"
     healthcheck:
