@@ -21,8 +21,38 @@ topology:
       kind: nokia_srlinux
       type: ixr-d2
 
+    # Linux Client on Leaf 01
+    client1:
+      kind: linux
+      image: wbitt/network-multitool:alpine-extra
+
+    # Firewall on Leaf 02
+    firewall:
+      kind: linux
+      image: wbitt/network-multitool:alpine-extra
+      sysctls:
+        - net.ipv4.ip_forward=1
+      exec:
+        # Default policy: drop forwarded traffic
+        - iptables -P FORWARD DROP
+        # Allow client1 (or fabric) to reach client2
+        - iptables -A FORWARD -i eth1 -o eth2 -j ACCEPT
+        # Allow returning traffic
+        - iptables -A FORWARD -i eth2 -o eth1 -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+    # Linux Client behind Firewall (Secure DMZ)
+    client2:
+      kind: linux
+      image: wbitt/network-multitool:alpine-extra
+
   links:
+    # Spine-Leaf Fabric Links
     - endpoints: ["spine01:e1-1", "leaf01:e1-49"]
     - endpoints: ["spine01:e1-2", "leaf02:e1-49"]
     - endpoints: ["spine01:e1-3", "leaf01:e1-50"]
     - endpoints: ["spine01:e1-4", "leaf02:e1-50"]
+
+    # Workload Links
+    - endpoints: ["client1:eth1", "leaf01:e1-1"]
+    - endpoints: ["firewall:eth1", "leaf02:e1-1"]
+    - endpoints: ["firewall:eth2", "client2:eth1"]
