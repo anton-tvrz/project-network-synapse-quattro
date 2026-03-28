@@ -6,22 +6,34 @@ Temporal workflows orchestrate multi-step network automation tasks. Each workflo
 
 ## Steps
 
-### 1. Define Activities
+### 1. Write the Test File
 
-Create activity functions in `workers/synapse_workers/activities/`:
+Create `tests/unit/test_<workflow>_workflow.py` with expected activity sequence and saga compensation:
 
 ```python
-# workers/synapse_workers/activities/my_activities.py
-from temporalio import activity
+# tests/unit/test_my_workflow_workflow.py
+import pytest
+from temporalio.testing import WorkflowEnvironment
+from temporalio.worker import Worker
 
-@activity.defn
-async def my_activity(device_name: str) -> dict:
-    """Perform some network operation."""
-    # Call Infrahub API, gNMI, etc.
-    return {"status": "success", "device": device_name}
+@pytest.mark.unit
+async def test_my_workflow_happy_path(workflow_env: WorkflowEnvironment):
+    """Workflow executes all activities in order on success."""
+    # Define mock activities
+    # Start workflow
+    # Assert result and activity call order
+
+@pytest.mark.unit
+async def test_my_workflow_saga_compensation(workflow_env: WorkflowEnvironment):
+    """Workflow triggers rollback when an activity fails."""
+    # Define mock activity that raises
+    # Start workflow
+    # Assert rollback activity was called
 ```
 
-### 2. Create the Workflow
+Run the test — it should **fail** (RED) because the workflow doesn't exist yet.
+
+### 2. Define the Workflow
 
 Create workflow class in `workers/synapse_workers/workflows/`:
 
@@ -46,7 +58,34 @@ class MyWorkflow:
         return result["status"]
 ```
 
-### 3. Register in Worker
+### 3. Define Activities
+
+Create activity functions in `workers/synapse_workers/activities/`:
+
+```python
+# workers/synapse_workers/activities/my_activities.py
+from temporalio import activity
+
+@activity.defn
+async def my_activity(device_name: str) -> dict:
+    """Perform some network operation."""
+    # Call Infrahub API, gNMI, etc.
+    return {"status": "success", "device": device_name}
+```
+
+### 4. Run Tests (GREEN)
+
+```bash
+# Run unit tests — should now pass
+uv run pytest tests/unit/test_my_workflow_workflow.py -v
+
+# Run all unit tests to check for regressions
+uv run invoke backend.test-unit
+```
+
+### 5. Integration Test with Temporal Test Server
+
+Register in worker and run integration tests:
 
 Add workflow and activities to `workers/synapse_workers/worker.py`:
 
@@ -62,21 +101,10 @@ worker = Worker(
 )
 ```
 
-### 4. Test
-
 ```bash
-# Unit test the workflow logic
-uv run pytest tests/unit/ -k "my_workflow" -v
-
 # Integration test (requires running Temporal server)
 uv run pytest tests/integration/ -k "my_workflow" -v
-```
 
-### 5. Run
-
-```bash
 # Start the worker
 uv run invoke workers.start
-
-# Trigger the workflow (via Temporal UI or SDK)
 ```

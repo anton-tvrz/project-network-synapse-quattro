@@ -1,5 +1,18 @@
 # Python Coding Standards
 
+## Testing
+
+All new code follows TDD. Write a failing test, implement the minimum to pass, refactor.
+
+- Tests live in `tests/` mirroring the source structure
+- Use pytest fixtures from `conftest.py` for shared test data
+- Unit tests: `tests/unit/` — no external dependencies, < 30s total
+- Integration tests: `tests/integration/` — containerlab + Infrahub required
+- E2E tests: `tests/e2e/` — full pipeline validation
+- Golden file tests: `tests/golden/` — byte-for-byte Jinja2 template output comparison
+- Coverage target: ≥80% on new code
+- Run tests: `uv run invoke backend.test-unit` (quick) or `uv run invoke backend.test-all` (full)
+
 ## Tooling
 
 | Tool | Purpose | Config Location |

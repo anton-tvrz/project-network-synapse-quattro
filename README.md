@@ -2,20 +2,69 @@
 
 Network automation platform for managing Nokia SR Linux datacenter fabric switches using Infrahub as Source of Truth, Temporal for workflow orchestration, and Containerlab for virtual network labs. Runs entirely on local macOS with OrbStack.
 
+## Why This Project?
+
+Network automation platforms lack data lineage between business intent and device configuration. A firewall rule cannot be traced back to the business need that created it, making regulatory audits a manual forensic exercise instead of a database query. When real-world events require temporary deviations from intended state, there is no formal model — engineers make manual overrides and hope someone remembers to revert them.
+
+NSQuattro solves both gaps: a **declarative intent model** in Infrahub (graph-native source of truth) with **durable workflow orchestration** via Temporal, deployed to Nokia SR Linux via gNMI. Every rule traces back to a business owner. Every override has a timer and auto-reverts. The prototype runs against real network devices in Containerlab.
+
 ## Architecture
 
-```
-  Infrahub (SoT)          Temporal            Nokia SR Linux
-  ┌────────────┐     ┌──────────────┐     ┌──────────────────┐
-  │ GraphQL API│────>│  Workflows   │────>│ spine01 (IXR-D3) │
-  │ Schemas    │     │  Activities  │     │ leaf01  (IXR-D2) │
-  │ Inventory  │     │  Workers     │     │ leaf02  (IXR-D2) │
-  └────────────┘     └──────────────┘     └──────────────────┘
-       │                    │                      │
-       └──── Query SoT ────┘──── gNMI Deploy ─────┘
+```mermaid
+graph TB
+    subgraph "Business Intent Layer"
+        AS[ApplicationService] --> SE[ServiceEndpoint]
+        SE --> CI[ConnectivityIntent]
+    end
+
+    subgraph "Infrastructure Binding"
+        CI --> IB[InfrastructureBinding]
+        IB --> FRS[FirewallRuleSet]
+    end
+
+    subgraph "Operational Intent"
+        OO[OperationalOverride] --> OW[OverrideWindow]
+        OO --> OA[OverrideAction]
+    end
+
+    subgraph "Source of Truth"
+        INF[Infrahub GraphQL API<br/>Schemas · Inventory · Lineage]
+    end
+
+    subgraph "Orchestration"
+        TMP[Temporal<br/>Workflows · Activities · Sagas]
+    end
+
+    subgraph "Executor"
+        GNMI[gNMI SET/GET<br/>Nokia SR Linux]
+    end
+
+    subgraph "Measurement"
+        PROM[Prometheus] --> GF[Grafana<br/>7 Dashboards]
+        INFLUX[InfluxDB<br/>13-month retention] --> GF
+        SQ[SuzieQ<br/>Network State] --> GF
+    end
+
+    FRS --> INF
+    OA --> INF
+    INF --> TMP
+    TMP --> GNMI
+    GNMI --> SQ
+    TMP --> PROM
 ```
 
 **Pipeline:** Query Infrahub SoT -> Render Jinja2 templates -> Deploy via gNMI -> Validate state
+
+## Key Features
+
+- **Business Intent Bridge** — Full data lineage from application owner to device rule. Every firewall rule traces to a business need. Audit compliance via GraphQL query, not manual investigation.
+- **Operational Intent (Time-Bounded Overrides)** — Model temporary deviations with automatic reversion. Fibre cuts, maintenance windows, emergency bypasses — all schema-defined with durable Temporal timers.
+- **Intent Lifecycle Metrics** — Lineage completeness ratio, provisioning duration, orphaned rule detection. Measure what matters from day one.
+- **gNMI Deployment with Saga Rollback** — Atomic config deployment to Nokia SR Linux via gNMI SET. Saga compensation automatically reverts on failure.
+- **Drift Detection** — Override-aware state comparison. Knows the difference between intentional deviations and unauthorised changes.
+- **7 Grafana Dashboards** — System Health, Network Operations, Automation Pipeline, Compliance Tracking, Capacity Planning, Intent Lifecycle, Operational Intent.
+- **Full Measurement Architecture** — Prometheus (real-time, 15-day), InfluxDB (trending, 13-month), SuzieQ (network state, 90-day). Three tools, three responsibilities, no gaps.
+- **AI-First Development** — Agent skills, Context Nuggets documentation pattern, TDD embedded in every surface.
 
 ## Quick Start
 
@@ -108,6 +157,8 @@ uv run invoke dev.deps            # Start infrastructure dependencies
 | Device Communication | gNMI (pygnmi) |
 | Config Templates | Jinja2 |
 | Container Runtime | [OrbStack](https://orbstack.dev/) (recommended) |
+| Time-Series DB | [InfluxDB](https://www.influxdata.com/) (13-month retention) |
+| Network State | [SuzieQ](https://suzieq.readthedocs.io/) (90-day state history) |
 
 ## Lab Topology
 
@@ -126,6 +177,20 @@ docker exec -it clab-spine-leaf-lab-spine01 sr_cli
 ```
 
 *See `dev/guides/containerlab-devcontainer.md` for full Containerlab management instructions.*
+
+## Roadmap
+
+| Epic | Focus | Status |
+|------|-------|--------|
+| **A: Business Intent Bridge** | 5-schema intent model, lineage queries, provisioning workflow | Planned |
+| **B: Operational Intent** | Time-bounded overrides, Temporal timers, auto-reversion | Planned |
+| **C: Repository Polish** | Description, topics, Mermaid diagram, v0.1.0 release | In Progress |
+| **D: Acknowledged Gaps** | Multi-vendor, WAN, graph deconfliction, AI agents (future) | Documented |
+| **E: Measurement & Monitoring** | InfluxDB, SuzieQ integration, 2 new Grafana dashboards, alert rules | Planned |
+| **F: TDD Embedding** | ADR, CI restructure, coverage gates, golden file testing | In Progress |
+| **G: Agent Skills** | Custom SKILL.md files for Infrahub, SR Linux, intent model, containerlab | Planned |
+
+See the [GitHub Project Board](https://github.com/anton-tvrz/project-network-synapse-quattro/issues) for full issue tracking.
 
 ## Contributing
 

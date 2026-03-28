@@ -68,6 +68,13 @@ test: add unit tests for config generator
 11. Merge via **squash merge** (keeps history clean)
 12. Delete the feature branch after merge
 
+### PR Checklist — TDD Items
+
+- [ ] Tests written BEFORE implementation (TDD)
+- [ ] All new code has corresponding test file
+- [ ] Coverage meets 80% threshold on new code
+- [ ] Bug fixes include a failing test that reproduces the bug
+
 ### Key Rules
 
 - **Keep PRs small** — aim for < 400 lines changed
