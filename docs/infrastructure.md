@@ -26,9 +26,9 @@ Spine-leaf topology with 1 spine and 2 leaf switches, all Nokia SR Linux.
 | spine01 | spine | 7220 IXR-D3 | 172.20.20.3 | clab-spine-leaf-lab-spine01 |
 | leaf01 | leaf | 7220 IXR-D2 | 172.20.20.2 | clab-spine-leaf-lab-leaf01 |
 | leaf02 | leaf | 7220 IXR-D2 | 172.20.20.4 | clab-spine-leaf-lab-leaf02 |
-| client1 | client | Linux (Alpine) | DHCP | clab-spine-leaf-lab-client1 |
-| firewall| firewall| Linux (Alpine) | DHCP | clab-spine-leaf-lab-firewall |
-| client2 | client | Linux (Alpine) | DHCP | clab-spine-leaf-lab-client2 |
+| firewall| firewall| VyOS 1.4 | DHCP | clab-spine-leaf-lab-firewall |
+| pc1     | client | Linux (Alpine) | DHCP | clab-spine-leaf-lab-pc1 |
+| pc2     | client | Linux (Alpine) | DHCP | clab-spine-leaf-lab-pc2 |
 
 ### Credentials
 
@@ -107,13 +107,13 @@ sudo containerlab deploy -t containerlab/topology.clab.yml
          +---+----+   +----+---+
         e1-1 |             | e1-1
          +---+----+   +----+---+
-         | client1|   |firewall|
-         | Linux  |   | Linux  |
+         | pc1    |   |firewall|
+         | Alpine |   | VyOS   |
          +--------+   +----+---+
                            | eth2
                       +----+---+
-                      | client2|
-                      | Linux  |
+                      | pc2    |
+                      | Alpine |
                       +--------+
 
 Links:
@@ -121,9 +121,9 @@ Links:
   spine01:e1-2 <-> leaf02:e1-49
   spine01:e1-3 <-> leaf01:e1-50
   spine01:e1-4 <-> leaf02:e1-50
-  leaf01:e1-1  <-> client1:eth1
+  leaf01:e1-1  <-> pc1:eth1
   leaf02:e1-1  <-> firewall:eth1
-  firewall:eth2<-> client2:eth1
+  firewall:eth2<-> pc2:eth1
 
 Management: 172.20.20.0/24
 ```
