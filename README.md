@@ -162,18 +162,28 @@ uv run invoke dev.deps            # Start infrastructure dependencies
 
 ## Lab Topology
 
-3-node Nokia SR Linux spine-leaf fabric running via Containerlab natively on OrbStack using a Docker-containerized deployment approach (DooD):
+Nokia SR Linux spine-leaf fabric with VyOS firewall and Alpine clients, running via Containerlab natively on OrbStack (DooD):
 
-- **spine01** (IXR-D3, AS65000) -- 4 fabric links
-- **leaf01** (IXR-D2, AS65001) -- 2 uplinks
-- **leaf02** (IXR-D2, AS65002) -- 2 uplinks
+- **spine01** (IXR-D3, AS65000) — 4 fabric links
+- **leaf01** (IXR-D2, AS65001) — 2 uplinks
+- **leaf02** (IXR-D2, AS65002) — 2 uplinks
+- **firewall** (VyOS 1.4) — attached to leaf02, separates pc1/pc2 zones
+- **pc1** (Alpine) — client on leaf01
+- **pc2** (Alpine) — client behind firewall on leaf02
 - Underlay: eBGP on `/31` point-to-point links
 
 **Accessing Nodes (from macOS terminal):**
 
 ```bash
-# Log straight into the Nokia SR Linux CLI (no password needed!)
+# Nokia SR Linux CLI
 docker exec -it clab-spine-leaf-lab-spine01 sr_cli
+
+# VyOS firewall
+docker exec -it clab-spine-leaf-lab-firewall /bin/bash
+
+# Alpine clients
+docker exec -it clab-spine-leaf-lab-pc1 /bin/sh
+docker exec -it clab-spine-leaf-lab-pc2 /bin/sh
 ```
 
 *See `dev/guides/containerlab-devcontainer.md` for full Containerlab management instructions.*
