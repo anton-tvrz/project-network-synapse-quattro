@@ -68,6 +68,8 @@ sudo containerlab destroy -t containerlab/topology.clab.yml
 ```bash
 # Nokia SR Linux CLI
 docker exec -it clab-spine-leaf-lab-spine01 sr_cli
+docker exec -it clab-spine-leaf-lab-leaf01 sr_cli
+docker exec -it clab-spine-leaf-lab-leaf02 sr_cli
 
 # VyOS firewall
 docker exec -it clab-spine-leaf-lab-firewall /bin/bash

@@ -123,7 +123,7 @@ Links:
   spine01:e1-4 <-> leaf02:e1-50
   leaf01:e1-1  <-> pc1:eth1
   leaf02:e1-1  <-> firewall:eth1
-  firewall:eth2<-> pc2:eth1
+  firewall:eth2 <-> pc2:eth1
 
 Management: 172.20.20.0/24
 ```
