@@ -130,6 +130,27 @@ See `dev/guidelines/python.md` for full details.
 
 See `dev/guidelines/git-workflow.md` for full details.
 
+## Development Workflow
+
+### Test-Driven Development (Mandatory)
+
+This project follows strict TDD. When implementing a new feature:
+1. Create the test file first in `tests/unit/` or `tests/integration/`.
+2. Write failing tests that define the expected behaviour.
+3. Implement the minimum code to pass.
+4. Refactor while keeping tests green.
+
+Never create a source file without its corresponding test file. If asked to implement a feature, always start by asking: what should the test look like?
+
+#### Test File Convention
+| Source File | Test File |
+|-------------|-----------|
+| `backend/network_synapse/schemas/<name>.yml` | `tests/unit/test_<name>_schema.py` |
+| `backend/network_synapse/checks/<name>.py` | `tests/unit/test_<name>_check.py` |
+| `backend/network_synapse/scripts/<name>.py` | `tests/integration/test_<name>.py` |
+| `workers/synapse_workers/workflows/<name>.py` | `tests/unit/test_<name>_workflow.py` |
+| `workers/synapse_workers/activities/<name>.py` | `tests/unit/test_<name>_activities.py` |
+
 ## Agent Rules (MANDATORY)
 
 > **All AI agents MUST follow these rules when working on this project.**
@@ -223,6 +244,32 @@ This project follows the **Context Nuggets** pattern (ADR-0001) for developer do
 | `dev/knowledge/`  | Architecture explanations                                                                                             | Human + AI |
 | `dev/prompts/`    | Prompt templates for thinking tasks                                                                                   | Human      |
 | `dev/skills/`     | Domain-specific AI agent skills                                                                                       | AI agents  |
+
+## Agent Skills
+
+AI agent skills are loaded automatically from `dev/skills/` (symlinked to `.claude/skills/`). Each skill provides domain-specific expertise that activates based on task context.
+
+### Skill Inventory
+
+| Skill | Location | What It Teaches |
+|-------|----------|-----------------|
+| **tdd** | `dev/skills/tdd/SKILL.md` | Red-Green-Refactor, test file conventions, pytest fixtures, coverage, golden file testing |
+| **infrahub** | `dev/skills/infrahub/SKILL.md` | Async SDK client, schema YAML, dependency-ordered loading, GraphQL queries, seed data upsert |
+| **srlinux-gnmi** | `dev/skills/srlinux-gnmi/SKILL.md` | YANG-modelled JSON config (NOT CLI), gNMI SET/GET via pygnmi, interface naming, lab topology |
+| **intent-model** | `dev/skills/intent-model/SKILL.md` | 5-object business intent chain, 3-object operational intent, forward/reverse lineage, override-aware drift |
+| **containerlab** | `dev/skills/containerlab/SKILL.md` | Topology YAML, SR Linux images, OrbStack networking, lab lifecycle, DNS names |
+| **temporal-developer** | `dev/skills/temporal-developer/` (git submodule, planned) | Workflow determinism, activity patterns, retry policies, testing, worker config |
+
+### Skill Interaction Map
+
+| Development Task | Skills That Activate |
+|------------------|---------------------|
+| Adding a new intent schema | infrahub + intent-model + tdd |
+| Implementing a Temporal workflow | temporal-developer + tdd + infrahub |
+| Writing a deployment activity | temporal-developer + srlinux-gnmi + containerlab |
+| Creating a Grafana dashboard | intent-model + tdd |
+| Adding operational override support | intent-model + temporal-developer + srlinux-gnmi + tdd |
+| Writing a compliance check | infrahub + intent-model + tdd |
 
 ## Infrastructure
 

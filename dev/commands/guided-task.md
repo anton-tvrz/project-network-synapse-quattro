@@ -2,33 +2,43 @@
 
 A general-purpose workflow for implementing any task.
 
-## 1. Understand the Task
+## 1. Identify the Test File
 - Read the task description carefully
 - Identify which packages and files will be affected
 - Check `dev/knowledge/` for relevant architecture docs
+- Determine the correct test file location (see `AGENTS.md` Test File Convention)
 
-## 2. Plan
-- Break the task into small, testable steps
-- Identify dependencies between steps
-- Consider edge cases and error handling
+## 2. Write Failing Tests
+- Create the test file in `tests/unit/` or `tests/integration/`
+- Write tests that define the expected behaviour of the new code
+- Run tests to confirm they **fail** (RED): `uv run pytest tests/unit/test_<module>.py -x`
+- If tests pass without implementation, the tests are not testing the right thing
 
 ## 3. Implement
-- Work through steps one at a time
+- Write the minimum code to make all tests pass (GREEN)
 - Follow `dev/guidelines/python.md` coding standards
-- Write tests alongside implementation (TDD when possible)
 - Keep commits small and focused
 
-## 4. Quality Checks
+## 4. Verify Green
+- Run the test file: `uv run pytest tests/unit/test_<module>.py -v`
+- All tests must pass
+- Run full suite to check for regressions: `uv run invoke backend.test-unit`
+
+## 5. Refactor
+- Improve code while keeping tests green
+- Extract shared logic, add type hints, simplify
+- Re-run tests after each refactor step
+
+## 6. Quality Checks
 - `uv run invoke format` — Format code
 - `uv run invoke lint` — Lint code
-- `uv run invoke backend.test-unit` — Run tests
 - `uv run invoke backend.typecheck` — Type check (if applicable)
 
-## 5. Document
+## 7. Document
 - Update docstrings for new/modified functions
 - Add changelog fragment if user-facing
 - Update `dev/knowledge/` docs if architecture changed
 
-## 6. Commit
+## 8. Commit
 - Use conventional commit messages
 - Reference issue numbers where applicable

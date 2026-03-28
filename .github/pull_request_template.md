@@ -31,6 +31,15 @@ uv run invoke backend.test-unit
 - [ ] No config changes required
 - [ ] No database/schema migration needed
 
+## TDD Checklist
+
+- [ ] Tests written before implementation (TDD)
+- [ ] All new source files have corresponding test files
+- [ ] Failing test demonstrated before fix (bug fixes only)
+- [ ] Coverage threshold met on new code (≥80%)
+- [ ] Saga/rollback path tested (workflow changes only)
+- [ ] Integration test included if touching device interaction (gNMI, Infrahub API, Temporal)
+
 ## Checklist
 
 - [ ] Tests added/updated
