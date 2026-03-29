@@ -16,24 +16,37 @@ Topologies are defined in `containerlab/topologies/`:
 ```yaml
 name: spine-leaf-lab
 topology:
+  kinds:
+    nokia_srlinux:
+      image: ghcr.io/nokia/srlinux:latest
   nodes:
     spine01:
       kind: nokia_srlinux
-      image: ghcr.io/nokia/srlinux:24.10.1
-      type: ixrd3
+      type: ixr-d3
     leaf01:
       kind: nokia_srlinux
-      image: ghcr.io/nokia/srlinux:24.10.1
-      type: ixrd2
+      type: ixr-d2
     leaf02:
       kind: nokia_srlinux
-      image: ghcr.io/nokia/srlinux:24.10.1
-      type: ixrd2
+      type: ixr-d2
+    firewall:
+      kind: linux
+      image: vyos/vyos:1.4-rolling-20240101
+      memory: 1GB
+    pc1:
+      kind: linux
+      image: wbitt/network-multitool:alpine-extra
+    pc2:
+      kind: linux
+      image: wbitt/network-multitool:alpine-extra
   links:
     - endpoints: ["spine01:e1-1", "leaf01:e1-49"]
-    - endpoints: ["spine01:e1-2", "leaf01:e1-50"]
-    - endpoints: ["spine01:e1-3", "leaf02:e1-49"]
+    - endpoints: ["spine01:e1-2", "leaf02:e1-49"]
+    - endpoints: ["spine01:e1-3", "leaf01:e1-50"]
     - endpoints: ["spine01:e1-4", "leaf02:e1-50"]
+    - endpoints: ["pc1:eth1", "leaf01:e1-1"]
+    - endpoints: ["firewall:eth1", "leaf02:e1-1"]
+    - endpoints: ["firewall:eth2", "pc2:eth1"]
 ```
 
 ## Lab Lifecycle Commands
@@ -53,13 +66,25 @@ sudo containerlab destroy -t containerlab/topology.clab.yml
 ## Node Access
 
 ```bash
-# SSH into a node
+# Nokia SR Linux CLI
 docker exec -it clab-spine-leaf-lab-spine01 sr_cli
+docker exec -it clab-spine-leaf-lab-leaf01 sr_cli
+docker exec -it clab-spine-leaf-lab-leaf02 sr_cli
+
+# VyOS firewall
+docker exec -it clab-spine-leaf-lab-firewall /bin/bash
+
+# Alpine clients
+docker exec -it clab-spine-leaf-lab-pc1 /bin/sh
+docker exec -it clab-spine-leaf-lab-pc2 /bin/sh
 
 # DNS names (from macOS)
 clab-spine-leaf-lab-spine01
 clab-spine-leaf-lab-leaf01
 clab-spine-leaf-lab-leaf02
+clab-spine-leaf-lab-firewall
+clab-spine-leaf-lab-pc1
+clab-spine-leaf-lab-pc2
 ```
 
 ## Management Network

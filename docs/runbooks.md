@@ -191,8 +191,11 @@ docker compose -f development/docker-compose-deps.yml up -d temporal
    docker exec -it clab-spine-leaf-lab-spine01 sr_cli    # spine01
    docker exec -it clab-spine-leaf-lab-leaf01 sr_cli     # leaf01
    docker exec -it clab-spine-leaf-lab-leaf02 sr_cli     # leaf02
-   # Linux Testing Clients
-   docker exec -it clab-spine-leaf-lab-client1 /bin/bash # client1
+   # Linux testing clients
+   docker exec -it clab-spine-leaf-lab-pc1 /bin/sh       # pc1
+   docker exec -it clab-spine-leaf-lab-pc2 /bin/sh       # pc2
+   # VyOS firewall
+   docker exec -it clab-spine-leaf-lab-firewall /bin/bash # firewall (VyOS)
    ```
 
 2. **Alternatively, SSH directly (OrbStack makes 172.20.20.x reachable):**
