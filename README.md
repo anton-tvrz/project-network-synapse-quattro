@@ -162,12 +162,12 @@ uv run invoke dev.deps            # Start infrastructure dependencies
 
 ## Lab Topology
 
-Nokia SR Linux spine-leaf fabric with VyOS firewall and Alpine clients, running via Containerlab natively on OrbStack (DooD):
+Nokia SR Linux spine-leaf fabric with Alpine Linux firewall and Alpine clients, running via Containerlab natively on OrbStack (DooD):
 
 - **spine01** (IXR-D3, AS65000) — 4 fabric links
 - **leaf01** (IXR-D2, AS65001) — 2 uplinks
 - **leaf02** (IXR-D2, AS65002) — 2 uplinks
-- **firewall** (VyOS 1.4) — attached to leaf02, separates pc1/pc2 zones
+- **firewall** (Alpine + iptables) — attached to leaf02, separates pc1/pc2 zones
 - **pc1** (Alpine) — client on leaf01
 - **pc2** (Alpine) — client behind firewall on leaf02
 - Underlay: eBGP on `/31` point-to-point links
@@ -178,7 +178,7 @@ Nokia SR Linux spine-leaf fabric with VyOS firewall and Alpine clients, running 
 # Nokia SR Linux CLI
 docker exec -it clab-spine-leaf-lab-spine01 sr_cli
 
-# VyOS firewall
+# Firewall (Alpine + iptables)
 docker exec -it clab-spine-leaf-lab-firewall /bin/bash
 
 # Alpine clients

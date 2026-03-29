@@ -21,11 +21,14 @@ topology:
       kind: nokia_srlinux
       type: ixr-d2
 
-    # --- Firewall (VyOS) on Leaf 02 ---
+    # --- Firewall (Alpine + iptables) on Leaf 02 ---
     firewall:
       kind: linux
-      image: vyos/vyos:1.4-rolling-20240101
-      memory: 1GB
+      image: wbitt/network-multitool@sha256:00bf63b9e033362a4adf138c4b14d92bc6ce52446358fed4da14c2e16e8a64aa
+      sysctls:
+        net.ipv4.ip_forward: 1
+      exec:
+        - apk add --no-cache iptables
 
     # --- Clients ---
     pc1:
