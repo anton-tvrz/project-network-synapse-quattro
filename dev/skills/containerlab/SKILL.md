@@ -31,8 +31,10 @@ topology:
       type: ixr-d2
     firewall:
       kind: linux
-      image: vyos/vyos:1.4-rolling-20240101
-      memory: 1GB
+      image: wbitt/network-multitool:alpine-extra
+      exec:
+        - sysctl -w net.ipv4.ip_forward=1
+        - apk add --no-cache iptables
     pc1:
       kind: linux
       image: wbitt/network-multitool:alpine-extra
@@ -71,7 +73,7 @@ docker exec -it clab-spine-leaf-lab-spine01 sr_cli
 docker exec -it clab-spine-leaf-lab-leaf01 sr_cli
 docker exec -it clab-spine-leaf-lab-leaf02 sr_cli
 
-# VyOS firewall
+# Firewall (Alpine + iptables)
 docker exec -it clab-spine-leaf-lab-firewall /bin/bash
 
 # Alpine clients
