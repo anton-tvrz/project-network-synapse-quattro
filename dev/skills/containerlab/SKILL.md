@@ -31,9 +31,10 @@ topology:
       type: ixr-d2
     firewall:
       kind: linux
-      image: wbitt/network-multitool:alpine-extra
+      image: wbitt/network-multitool@sha256:00bf63b9e...
+      sysctls:
+        net.ipv4.ip_forward: 1
       exec:
-        - sysctl -w net.ipv4.ip_forward=1
         - apk add --no-cache iptables
     pc1:
       kind: linux
