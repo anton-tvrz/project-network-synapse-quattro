@@ -16,6 +16,7 @@ from temporalio.common import RetryPolicy
 from temporalio.exceptions import ApplicationError
 
 with workflow.unsafe.imports_passed_through():
+    from network_synapse.scripts.generate_configs import generate_interface_config
     from synapse_workers.activities.config_deployment_activities import deploy_config
     from synapse_workers.activities.device_backup_activities import backup_running_config, store_backup
     from synapse_workers.activities.drift_activities import fetch_running_config, log_audit_event
@@ -40,6 +41,17 @@ class DriftResult:
     diff: str
 
 
+def _has_admin_state_key(obj: object) -> bool:
+    """Recursively check if a dict/list structure contains an 'admin-state' key."""
+    if isinstance(obj, dict):
+        if "admin-state" in obj:
+            return True
+        return any(_has_admin_state_key(v) for v in obj.values())
+    if isinstance(obj, list):
+        return any(_has_admin_state_key(item) for item in obj)
+    return False
+
+
 def classify_drift(intended_json: str, running_json: str) -> DriftResult:
     """Compare intended and running configs and classify drift severity.
 
@@ -61,8 +73,8 @@ def classify_drift(intended_json: str, running_json: str) -> DriftResult:
         r_val = running.get(key)
         if i_val != r_val:
             diff_lines.append(f"key={key} intended={json.dumps(i_val)} running={json.dumps(r_val)}")
-            # admin-state changes or missing keys are critical
-            if i_val is None or r_val is None or "admin-state" in str(r_val):
+            # Missing/added keys or admin-state changes are critical
+            if i_val is None or r_val is None or _has_admin_state_key(r_val):
                 has_critical = True
 
     severity = DriftSeverity.CRITICAL if has_critical else DriftSeverity.COSMETIC
@@ -84,11 +96,12 @@ class DriftRemediationWorkflow:
 
     Steps:
       1. Fetch intended config from Infrahub
-      2. Fetch running config from device via gNMI GET
-      3. Diff intended vs actual — classify drift severity
-      4. If no drift: return early
-      5. If drift: backup running config, re-deploy intended, validate
-      6. Report drift event via audit log
+      2. Generate intended SR Linux JSON from Infrahub data
+      3. Fetch running config from device via gNMI GET
+      4. Diff intended vs actual — classify drift severity
+      5. If no drift: return early
+      6. If drift: backup running config, re-deploy intended, validate
+      7. Report drift event via audit log
     """
 
     @workflow.run
@@ -99,7 +112,7 @@ class DriftRemediationWorkflow:
             "NO_DRIFT" if configs match, "REMEDIATED" if drift was fixed.
 
         Raises:
-            RuntimeError: If remediation deployment or validation fails.
+            ApplicationError: If remediation deployment or validation fails.
         """
         workflow.logger.info(f"Starting drift check for {device_hostname} ({ip_address})")
 
@@ -109,9 +122,13 @@ class DriftRemediationWorkflow:
             args=[device_hostname],
             start_to_close_timeout=timedelta(seconds=30),
         )
-        intended_config_json = device_data.get("intended_config_json", "{}")
 
-        # 2. Fetch running config from device
+        # 2. Generate intended SR Linux JSON config from Infrahub data
+        # (deterministic — safe to run inside workflow)
+        iface_payload = json.loads(generate_interface_config(device_data["interfaces"]))
+        intended_config_json = json.dumps(iface_payload)
+
+        # 3. Fetch running config from device
         running_config_json = await workflow.execute_activity(
             fetch_running_config,
             args=[device_hostname, ip_address],
@@ -119,14 +136,14 @@ class DriftRemediationWorkflow:
             retry_policy=device_retry_policy,
         )
 
-        # 3. Classify drift (deterministic — runs in workflow)
+        # 4. Classify drift (deterministic — runs in workflow)
         drift = classify_drift(intended_config_json, running_config_json)
 
         if not drift.has_drift:
             workflow.logger.info(f"No drift detected on {device_hostname}")
             return "NO_DRIFT"
 
-        # 4. Drift detected — log and remediate
+        # 5. Drift detected — log and remediate
         workflow.logger.warning(f"Drift detected on {device_hostname}: severity={drift.severity.value}\n{drift.diff}")
 
         await workflow.execute_activity(
@@ -135,7 +152,7 @@ class DriftRemediationWorkflow:
             start_to_close_timeout=timedelta(seconds=10),
         )
 
-        # 5. Backup current (drifted) config before remediation
+        # 6. Backup current (drifted) config before remediation
         backup_json = await workflow.execute_activity(
             backup_running_config,
             args=[device_hostname, ip_address],
@@ -148,7 +165,7 @@ class DriftRemediationWorkflow:
             start_to_close_timeout=timedelta(seconds=10),
         )
 
-        # 6. Re-deploy intended config
+        # 7. Re-deploy intended config
         try:
             await workflow.execute_activity(
                 deploy_config,
@@ -159,18 +176,18 @@ class DriftRemediationWorkflow:
         except Exception as e:
             workflow.logger.error(f"Drift remediation deploy failed on {device_hostname}: {e!s}")
             await workflow.execute_activity(
-                "update_device_status",
+                update_device_status,
                 args=[device_hostname, "maintenance"],
                 start_to_close_timeout=timedelta(seconds=10),
             )
             await workflow.execute_activity(
-                "log_audit_event",
+                log_audit_event,
                 args=["DRIFT_REMEDIATION_FAILED", device_hostname, str(e)],
                 start_to_close_timeout=timedelta(seconds=10),
             )
             raise ApplicationError(f"Drift remediation failed for {device_hostname}: {e!s}", non_retryable=True) from e
 
-        # 7. Post-remediation validation
+        # 8. Post-remediation validation
         try:
             await workflow.execute_activity(
                 validate_bgp,
@@ -188,7 +205,7 @@ class DriftRemediationWorkflow:
         except Exception as e:
             workflow.logger.error(f"Post-remediation validation failed on {device_hostname}: {e!s}")
             await workflow.execute_activity(
-                "update_device_status",
+                update_device_status,
                 args=[device_hostname, "maintenance"],
                 start_to_close_timeout=timedelta(seconds=10),
             )
@@ -196,7 +213,7 @@ class DriftRemediationWorkflow:
                 f"Drift remediation failed for {device_hostname}: validation error: {e!s}", non_retryable=True
             ) from e
 
-        # 8. Success — update status and log
+        # 9. Success — update status and log
         await workflow.execute_activity(
             update_device_status,
             args=[device_hostname, "active"],

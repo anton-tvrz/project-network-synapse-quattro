@@ -64,7 +64,7 @@ class EmergencyChangeWorkflow:
             "EMERGENCY_APPLIED" if permanent, "EMERGENCY_REVERTED" if TTL expired.
 
         Raises:
-            RuntimeError: If deploy or validation fails (after rollback).
+            ApplicationError: If deploy or validation fails (after rollback).
         """
         device = change_input.device_hostname
         ip = change_input.ip_address
@@ -110,15 +110,14 @@ class EmergencyChangeWorkflow:
             )
         except Exception as e:
             workflow.logger.error(f"Emergency deploy failed on {device}: {e!s}")
-            # Rollback to backup
             await workflow.execute_activity(
-                "rollback_config",
+                rollback_config,
                 args=[device, ip, backup_json],
                 start_to_close_timeout=timedelta(seconds=60),
                 retry_policy=device_retry_policy,
             )
             await workflow.execute_activity(
-                "log_audit_event",
+                log_audit_event,
                 args=["EMERGENCY_DEPLOY_FAILED", device, str(e)],
                 start_to_close_timeout=timedelta(seconds=10),
             )
@@ -135,18 +134,13 @@ class EmergencyChangeWorkflow:
         except Exception as e:
             workflow.logger.error(f"Emergency post-deploy validation failed on {device}: {e!s}")
             await workflow.execute_activity(
-                "rollback_config",
+                rollback_config,
                 args=[device, ip, backup_json],
                 start_to_close_timeout=timedelta(seconds=60),
                 retry_policy=device_retry_policy,
             )
             await workflow.execute_activity(
-                "update_device_status",
-                args=[device, "maintenance"],
-                start_to_close_timeout=timedelta(seconds=10),
-            )
-            await workflow.execute_activity(
-                "log_audit_event",
+                log_audit_event,
                 args=["EMERGENCY_VALIDATION_FAILED", device, str(e)],
                 start_to_close_timeout=timedelta(seconds=10),
             )

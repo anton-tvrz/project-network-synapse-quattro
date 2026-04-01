@@ -3,12 +3,9 @@
 from __future__ import annotations
 
 import json
-import logging
 
 from pygnmi.client import gNMIclient
 from temporalio import activity
-
-logger = logging.getLogger(__name__)
 
 
 @activity.defn
