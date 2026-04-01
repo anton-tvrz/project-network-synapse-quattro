@@ -65,7 +65,7 @@ def classify_drift(intended_json: str, running_json: str) -> DriftResult:
 
     # Build a human-readable diff of top-level differences
     diff_lines: list[str] = []
-    all_keys = set(list(intended.keys()) + list(running.keys()))
+    all_keys = intended.keys() | running.keys()
     has_critical = False
 
     for key in sorted(all_keys):
@@ -74,7 +74,7 @@ def classify_drift(intended_json: str, running_json: str) -> DriftResult:
         if i_val != r_val:
             diff_lines.append(f"key={key} intended={json.dumps(i_val)} running={json.dumps(r_val)}")
             # Missing/added keys or admin-state changes are critical
-            if i_val is None or r_val is None or _has_admin_state_key(r_val):
+            if i_val is None or r_val is None or _has_admin_state_key(r_val) or _has_admin_state_key(i_val):
                 has_critical = True
 
     severity = DriftSeverity.CRITICAL if has_critical else DriftSeverity.COSMETIC

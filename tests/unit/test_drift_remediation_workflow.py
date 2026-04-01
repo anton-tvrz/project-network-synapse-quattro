@@ -3,7 +3,8 @@
 Tests cover:
 - No-drift scenario (intended == actual) — no remediation
 - Drift detected — triggers backup, re-deploy, validate cycle
-- Drift detected but remediation fails — raises, marks device maintenance
+- Drift detected but deploy fails — raises, marks device maintenance
+- Drift detected but validation fails — raises, marks device maintenance
 - Severity classification: critical vs cosmetic drift
 """
 
@@ -13,6 +14,7 @@ from unittest.mock import patch
 
 import pytest
 from temporalio import activity
+from temporalio.client import WorkflowFailureError
 from temporalio.exceptions import ApplicationError
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import UnsandboxedWorkflowRunner, Worker
@@ -70,6 +72,11 @@ async def mock_validate_bgp(device_hostname: str, ip_address: str) -> bool:
     return True
 
 
+@activity.defn(name="validate_bgp")
+async def mock_validate_bgp_fail(device_hostname: str, ip_address: str) -> bool:
+    raise ApplicationError("BGP validation failed", non_retryable=True)
+
+
 @activity.defn(name="validate_interfaces")
 async def mock_validate_interfaces(device_hostname: str, ip_address: str, intended_interfaces: list[dict]) -> dict:
     return {"passed": True, "device": device_hostname, "details": []}
@@ -108,17 +115,17 @@ async def mock_log_audit_event(event_type: str, device_hostname: str, details: s
 class TestClassifyDrift:
     """Test drift classification logic."""
 
-    def test_no_drift(self) -> None:
+    def test_no_drift_when_configs_match(self) -> None:
         result = classify_drift(INTENDED_CONFIG, RUNNING_CONFIG_CLEAN)
         assert result.has_drift is False
         assert result.severity == DriftSeverity.NONE
 
-    def test_drift_detected(self) -> None:
+    def test_drift_severity_when_admin_state_changed_returns_critical(self) -> None:
         result = classify_drift(INTENDED_CONFIG, RUNNING_CONFIG_DRIFTED)
         assert result.has_drift is True
-        assert result.severity in (DriftSeverity.CRITICAL, DriftSeverity.COSMETIC)
+        assert result.severity == DriftSeverity.CRITICAL  # admin-state change is critical
 
-    def test_drift_includes_diff_details(self) -> None:
+    def test_drift_diff_when_configs_differ_includes_details(self) -> None:
         result = classify_drift(INTENDED_CONFIG, RUNNING_CONFIG_DRIFTED)
         assert result.has_drift is True
         assert result.diff != ""
@@ -152,7 +159,7 @@ DRIFT_ACTIVITIES_DRIFTED = [
     mock_log_audit_event,
 ]
 
-DRIFT_ACTIVITIES_FAIL = [
+DRIFT_ACTIVITIES_DEPLOY_FAIL = [
     mock_fetch_device_config,
     mock_fetch_running_config_drifted,
     mock_deploy_config_fail,
@@ -164,11 +171,23 @@ DRIFT_ACTIVITIES_FAIL = [
     mock_log_audit_event,
 ]
 
+DRIFT_ACTIVITIES_VALIDATION_FAIL = [
+    mock_fetch_device_config,
+    mock_fetch_running_config_drifted,
+    mock_deploy_config,
+    mock_validate_bgp_fail,
+    mock_validate_interfaces,
+    mock_update_device_status,
+    mock_backup_running_config,
+    mock_store_backup,
+    mock_log_audit_event,
+]
+
 _PATCH_TARGET = "synapse_workers.workflows.drift_remediation_workflow.generate_interface_config"
 
 
 @pytest.mark.asyncio
-async def test_no_drift_returns_clean() -> None:
+async def test_run_when_configs_match_returns_no_drift() -> None:
     """When intended == running, workflow reports no drift and takes no action."""
     with patch(_PATCH_TARGET, return_value=INTENDED_CONFIG):
         async with (
@@ -191,7 +210,7 @@ async def test_no_drift_returns_clean() -> None:
 
 
 @pytest.mark.asyncio
-async def test_drift_detected_and_remediated() -> None:
+async def test_run_when_drift_detected_returns_remediated() -> None:
     """When drift is detected, workflow remediates and returns REMEDIATED."""
     with patch(_PATCH_TARGET, return_value=INTENDED_CONFIG):
         async with (
@@ -214,7 +233,7 @@ async def test_drift_detected_and_remediated() -> None:
 
 
 @pytest.mark.asyncio
-async def test_drift_remediation_failure_raises() -> None:
+async def test_run_when_deploy_fails_raises_application_error() -> None:
     """When drift is detected but deploy fails, workflow raises ApplicationError."""
     with patch(_PATCH_TARGET, return_value=INTENDED_CONFIG):
         async with (
@@ -223,17 +242,39 @@ async def test_drift_remediation_failure_raises() -> None:
                 env.client,
                 task_queue="test-drift",
                 workflows=[DriftRemediationWorkflow],
-                activities=DRIFT_ACTIVITIES_FAIL,
+                activities=DRIFT_ACTIVITIES_DEPLOY_FAIL,
                 workflow_runner=UnsandboxedWorkflowRunner(),
             ),
         ):
-            from temporalio.client import WorkflowFailureError
-
             with pytest.raises(WorkflowFailureError) as exc_info:
                 await env.client.execute_workflow(
                     DriftRemediationWorkflow.run,
                     args=[DEVICE, IP],
-                    id=f"drift-test-fail-{DEVICE}",
+                    id=f"drift-test-deploy-fail-{DEVICE}",
                     task_queue="test-drift",
                 )
             assert "Drift remediation failed" in str(exc_info.value.cause)
+
+
+@pytest.mark.asyncio
+async def test_run_when_validation_fails_raises_application_error() -> None:
+    """When drift is detected and deployed but validation fails, workflow raises."""
+    with patch(_PATCH_TARGET, return_value=INTENDED_CONFIG):
+        async with (
+            await WorkflowEnvironment.start_local() as env,
+            Worker(
+                env.client,
+                task_queue="test-drift",
+                workflows=[DriftRemediationWorkflow],
+                activities=DRIFT_ACTIVITIES_VALIDATION_FAIL,
+                workflow_runner=UnsandboxedWorkflowRunner(),
+            ),
+        ):
+            with pytest.raises(WorkflowFailureError) as exc_info:
+                await env.client.execute_workflow(
+                    DriftRemediationWorkflow.run,
+                    args=[DEVICE, IP],
+                    id=f"drift-test-validate-fail-{DEVICE}",
+                    task_queue="test-drift",
+                )
+            assert "validation error" in str(exc_info.value.cause)

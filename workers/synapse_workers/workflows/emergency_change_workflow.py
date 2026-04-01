@@ -69,6 +69,9 @@ class EmergencyChangeWorkflow:
         device = change_input.device_hostname
         ip = change_input.ip_address
 
+        if change_input.ttl_seconds < 0:
+            raise ApplicationError("ttl_seconds must be >= 0", non_retryable=True)
+
         workflow.logger.info(
             f"EMERGENCY CHANGE initiated for {device} by {change_input.operator}: {change_input.reason}"
         )
@@ -110,17 +113,20 @@ class EmergencyChangeWorkflow:
             )
         except Exception as e:
             workflow.logger.error(f"Emergency deploy failed on {device}: {e!s}")
-            await workflow.execute_activity(
-                rollback_config,
-                args=[device, ip, backup_json],
-                start_to_close_timeout=timedelta(seconds=60),
-                retry_policy=device_retry_policy,
-            )
-            await workflow.execute_activity(
-                log_audit_event,
-                args=["EMERGENCY_DEPLOY_FAILED", device, str(e)],
-                start_to_close_timeout=timedelta(seconds=10),
-            )
+            try:
+                await workflow.execute_activity(
+                    rollback_config,
+                    args=[device, ip, backup_json],
+                    start_to_close_timeout=timedelta(seconds=60),
+                    retry_policy=device_retry_policy,
+                )
+                await workflow.execute_activity(
+                    log_audit_event,
+                    args=["EMERGENCY_DEPLOY_FAILED", device, str(e)],
+                    start_to_close_timeout=timedelta(seconds=10),
+                )
+            except Exception as cleanup_exc:
+                workflow.logger.error(f"Recovery failed during deploy rollback on {device}: {cleanup_exc!s}")
             raise ApplicationError(f"Emergency deploy failed for {device}: {e!s}", non_retryable=True) from e
 
         # 5. Post-deploy validation
@@ -133,17 +139,20 @@ class EmergencyChangeWorkflow:
             )
         except Exception as e:
             workflow.logger.error(f"Emergency post-deploy validation failed on {device}: {e!s}")
-            await workflow.execute_activity(
-                rollback_config,
-                args=[device, ip, backup_json],
-                start_to_close_timeout=timedelta(seconds=60),
-                retry_policy=device_retry_policy,
-            )
-            await workflow.execute_activity(
-                log_audit_event,
-                args=["EMERGENCY_VALIDATION_FAILED", device, str(e)],
-                start_to_close_timeout=timedelta(seconds=10),
-            )
+            try:
+                await workflow.execute_activity(
+                    rollback_config,
+                    args=[device, ip, backup_json],
+                    start_to_close_timeout=timedelta(seconds=60),
+                    retry_policy=device_retry_policy,
+                )
+                await workflow.execute_activity(
+                    log_audit_event,
+                    args=["EMERGENCY_VALIDATION_FAILED", device, str(e)],
+                    start_to_close_timeout=timedelta(seconds=10),
+                )
+            except Exception as cleanup_exc:
+                workflow.logger.error(f"Recovery failed during validation rollback on {device}: {cleanup_exc!s}")
             raise ApplicationError(f"Emergency validation failed for {device}: {e!s}", non_retryable=True) from e
 
         await workflow.execute_activity(
@@ -159,12 +168,27 @@ class EmergencyChangeWorkflow:
 
             workflow.logger.info(f"TTL expired for emergency change on {device}, reverting to backup")
 
-            await workflow.execute_activity(
-                rollback_config,
-                args=[device, ip, backup_json],
-                start_to_close_timeout=timedelta(seconds=60),
-                retry_policy=device_retry_policy,
-            )
+            try:
+                await workflow.execute_activity(
+                    rollback_config,
+                    args=[device, ip, backup_json],
+                    start_to_close_timeout=timedelta(seconds=60),
+                    retry_policy=device_retry_policy,
+                )
+            except Exception as revert_exc:
+                workflow.logger.error(f"TTL auto-revert failed on {device}: {revert_exc!s}")
+                try:
+                    await workflow.execute_activity(
+                        log_audit_event,
+                        args=["EMERGENCY_REVERT_FAILED", device, str(revert_exc)],
+                        start_to_close_timeout=timedelta(seconds=10),
+                    )
+                except Exception as audit_exc:
+                    workflow.logger.error(f"Failed to log revert failure audit for {device}: {audit_exc!s}")
+                raise ApplicationError(
+                    f"Emergency TTL revert failed for {device}: {revert_exc!s}", non_retryable=True
+                ) from revert_exc
+
             await workflow.execute_activity(
                 update_device_status,
                 args=[device, "active"],
