@@ -8,7 +8,7 @@ from temporalio.worker import Worker
 
 from synapse_workers.activities.config_deployment_activities import deploy_config, rollback_config
 from synapse_workers.activities.device_backup_activities import backup_running_config, store_backup
-from synapse_workers.activities.drift_activities import fetch_running_config, log_audit_event
+from synapse_workers.activities.drift_activities import fetch_running_config, log_audit_event, render_intended_config
 from synapse_workers.activities.infrahub_activities import fetch_device_config, update_device_status
 from synapse_workers.activities.validation_activities import validate_bgp, validate_interfaces
 from synapse_workers.workflows.drift_remediation_workflow import DriftRemediationWorkflow
@@ -39,6 +39,7 @@ async def main() -> None:
             validate_bgp,
             validate_interfaces,
             log_audit_event,
+            render_intended_config,
         ],
     )
 

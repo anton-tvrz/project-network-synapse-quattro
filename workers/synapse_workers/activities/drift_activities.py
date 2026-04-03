@@ -7,6 +7,8 @@ import json
 from pygnmi.client import gNMIclient
 from temporalio import activity
 
+from network_synapse.scripts.generate_configs import generate_interface_config
+
 
 @activity.defn
 async def fetch_running_config(
@@ -38,6 +40,18 @@ async def fetch_running_config(
     except Exception as e:
         activity.logger.error(f"Failed to fetch running config from {device_hostname}: {e!s}")
         raise RuntimeError(f"Fetch running config failed: {e!s}") from e
+
+
+@activity.defn
+async def render_intended_config(interface_data: dict) -> str:
+    """Render intended SR Linux interface config JSON from Infrahub data.
+
+    Wraps the Jinja2 template rendering in an activity to keep
+    non-deterministic I/O (file system access) out of the workflow.
+    """
+    rendered = generate_interface_config(interface_data)
+    # Normalize through JSON parse/dump to ensure canonical form
+    return json.dumps(json.loads(rendered))
 
 
 @activity.defn

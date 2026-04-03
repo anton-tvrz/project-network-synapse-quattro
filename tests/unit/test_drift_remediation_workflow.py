@@ -10,8 +10,6 @@ Tests cover:
 
 from __future__ import annotations
 
-from unittest.mock import patch
-
 import pytest
 from temporalio import activity
 from temporalio.client import WorkflowFailureError
@@ -45,6 +43,11 @@ async def mock_fetch_device_config(device_hostname: str) -> dict:
         "bgp": {"router_id": "10.1.0.1", "local_asn": 65000, "sessions": []},
         "interfaces": {"hostname": device_hostname, "interfaces": [{"name": "ethernet-1/1"}]},
     }
+
+
+@activity.defn(name="render_intended_config")
+async def mock_render_intended_config(interface_data: dict) -> str:
+    return INTENDED_CONFIG
 
 
 @activity.defn(name="fetch_running_config")
@@ -137,6 +140,7 @@ class TestClassifyDrift:
 
 DRIFT_ACTIVITIES_HAPPY = [
     mock_fetch_device_config,
+    mock_render_intended_config,
     mock_fetch_running_config_clean,
     mock_deploy_config,
     mock_validate_bgp,
@@ -149,6 +153,7 @@ DRIFT_ACTIVITIES_HAPPY = [
 
 DRIFT_ACTIVITIES_DRIFTED = [
     mock_fetch_device_config,
+    mock_render_intended_config,
     mock_fetch_running_config_drifted,
     mock_deploy_config,
     mock_validate_bgp,
@@ -161,6 +166,7 @@ DRIFT_ACTIVITIES_DRIFTED = [
 
 DRIFT_ACTIVITIES_DEPLOY_FAIL = [
     mock_fetch_device_config,
+    mock_render_intended_config,
     mock_fetch_running_config_drifted,
     mock_deploy_config_fail,
     mock_validate_bgp,
@@ -173,6 +179,7 @@ DRIFT_ACTIVITIES_DEPLOY_FAIL = [
 
 DRIFT_ACTIVITIES_VALIDATION_FAIL = [
     mock_fetch_device_config,
+    mock_render_intended_config,
     mock_fetch_running_config_drifted,
     mock_deploy_config,
     mock_validate_bgp_fail,
@@ -183,98 +190,92 @@ DRIFT_ACTIVITIES_VALIDATION_FAIL = [
     mock_log_audit_event,
 ]
 
-_PATCH_TARGET = "synapse_workers.workflows.drift_remediation_workflow.generate_interface_config"
-
 
 @pytest.mark.asyncio
 async def test_run_when_configs_match_returns_no_drift() -> None:
     """When intended == running, workflow reports no drift and takes no action."""
-    with patch(_PATCH_TARGET, return_value=INTENDED_CONFIG):
-        async with (
-            await WorkflowEnvironment.start_local() as env,
-            Worker(
-                env.client,
-                task_queue="test-drift",
-                workflows=[DriftRemediationWorkflow],
-                activities=DRIFT_ACTIVITIES_HAPPY,
-                workflow_runner=UnsandboxedWorkflowRunner(),
-            ),
-        ):
-            result = await env.client.execute_workflow(
-                DriftRemediationWorkflow.run,
-                args=[DEVICE, IP],
-                id=f"drift-test-clean-{DEVICE}",
-                task_queue="test-drift",
-            )
-            assert result == "NO_DRIFT"
+    async with (
+        await WorkflowEnvironment.start_local() as env,
+        Worker(
+            env.client,
+            task_queue="test-drift",
+            workflows=[DriftRemediationWorkflow],
+            activities=DRIFT_ACTIVITIES_HAPPY,
+            workflow_runner=UnsandboxedWorkflowRunner(),
+        ),
+    ):
+        result = await env.client.execute_workflow(
+            DriftRemediationWorkflow.run,
+            args=[DEVICE, IP],
+            id=f"drift-test-clean-{DEVICE}",
+            task_queue="test-drift",
+        )
+        assert result == "NO_DRIFT"
 
 
 @pytest.mark.asyncio
 async def test_run_when_drift_detected_returns_remediated() -> None:
     """When drift is detected, workflow remediates and returns REMEDIATED."""
-    with patch(_PATCH_TARGET, return_value=INTENDED_CONFIG):
-        async with (
-            await WorkflowEnvironment.start_local() as env,
-            Worker(
-                env.client,
-                task_queue="test-drift",
-                workflows=[DriftRemediationWorkflow],
-                activities=DRIFT_ACTIVITIES_DRIFTED,
-                workflow_runner=UnsandboxedWorkflowRunner(),
-            ),
-        ):
-            result = await env.client.execute_workflow(
-                DriftRemediationWorkflow.run,
-                args=[DEVICE, IP],
-                id=f"drift-test-remediated-{DEVICE}",
-                task_queue="test-drift",
-            )
-            assert result == "REMEDIATED"
+    async with (
+        await WorkflowEnvironment.start_local() as env,
+        Worker(
+            env.client,
+            task_queue="test-drift",
+            workflows=[DriftRemediationWorkflow],
+            activities=DRIFT_ACTIVITIES_DRIFTED,
+            workflow_runner=UnsandboxedWorkflowRunner(),
+        ),
+    ):
+        result = await env.client.execute_workflow(
+            DriftRemediationWorkflow.run,
+            args=[DEVICE, IP],
+            id=f"drift-test-remediated-{DEVICE}",
+            task_queue="test-drift",
+        )
+        assert result == "REMEDIATED"
 
 
 @pytest.mark.asyncio
 async def test_run_when_deploy_fails_raises_application_error() -> None:
     """When drift is detected but deploy fails, workflow raises ApplicationError."""
-    with patch(_PATCH_TARGET, return_value=INTENDED_CONFIG):
-        async with (
-            await WorkflowEnvironment.start_local() as env,
-            Worker(
-                env.client,
+    async with (
+        await WorkflowEnvironment.start_local() as env,
+        Worker(
+            env.client,
+            task_queue="test-drift",
+            workflows=[DriftRemediationWorkflow],
+            activities=DRIFT_ACTIVITIES_DEPLOY_FAIL,
+            workflow_runner=UnsandboxedWorkflowRunner(),
+        ),
+    ):
+        with pytest.raises(WorkflowFailureError) as exc_info:
+            await env.client.execute_workflow(
+                DriftRemediationWorkflow.run,
+                args=[DEVICE, IP],
+                id=f"drift-test-deploy-fail-{DEVICE}",
                 task_queue="test-drift",
-                workflows=[DriftRemediationWorkflow],
-                activities=DRIFT_ACTIVITIES_DEPLOY_FAIL,
-                workflow_runner=UnsandboxedWorkflowRunner(),
-            ),
-        ):
-            with pytest.raises(WorkflowFailureError) as exc_info:
-                await env.client.execute_workflow(
-                    DriftRemediationWorkflow.run,
-                    args=[DEVICE, IP],
-                    id=f"drift-test-deploy-fail-{DEVICE}",
-                    task_queue="test-drift",
-                )
-            assert "Drift remediation failed" in str(exc_info.value.cause)
+            )
+        assert "Drift remediation failed" in str(exc_info.value.cause)
 
 
 @pytest.mark.asyncio
 async def test_run_when_validation_fails_raises_application_error() -> None:
     """When drift is detected and deployed but validation fails, workflow raises."""
-    with patch(_PATCH_TARGET, return_value=INTENDED_CONFIG):
-        async with (
-            await WorkflowEnvironment.start_local() as env,
-            Worker(
-                env.client,
+    async with (
+        await WorkflowEnvironment.start_local() as env,
+        Worker(
+            env.client,
+            task_queue="test-drift",
+            workflows=[DriftRemediationWorkflow],
+            activities=DRIFT_ACTIVITIES_VALIDATION_FAIL,
+            workflow_runner=UnsandboxedWorkflowRunner(),
+        ),
+    ):
+        with pytest.raises(WorkflowFailureError) as exc_info:
+            await env.client.execute_workflow(
+                DriftRemediationWorkflow.run,
+                args=[DEVICE, IP],
+                id=f"drift-test-validate-fail-{DEVICE}",
                 task_queue="test-drift",
-                workflows=[DriftRemediationWorkflow],
-                activities=DRIFT_ACTIVITIES_VALIDATION_FAIL,
-                workflow_runner=UnsandboxedWorkflowRunner(),
-            ),
-        ):
-            with pytest.raises(WorkflowFailureError) as exc_info:
-                await env.client.execute_workflow(
-                    DriftRemediationWorkflow.run,
-                    args=[DEVICE, IP],
-                    id=f"drift-test-validate-fail-{DEVICE}",
-                    task_queue="test-drift",
-                )
-            assert "validation error" in str(exc_info.value.cause)
+            )
+        assert "validation error" in str(exc_info.value.cause)

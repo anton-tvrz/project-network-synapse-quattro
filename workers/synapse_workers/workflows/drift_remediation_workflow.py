@@ -16,10 +16,13 @@ from temporalio.common import RetryPolicy
 from temporalio.exceptions import ApplicationError
 
 with workflow.unsafe.imports_passed_through():
-    from network_synapse.scripts.generate_configs import generate_interface_config
     from synapse_workers.activities.config_deployment_activities import deploy_config
     from synapse_workers.activities.device_backup_activities import backup_running_config, store_backup
-    from synapse_workers.activities.drift_activities import fetch_running_config, log_audit_event
+    from synapse_workers.activities.drift_activities import (
+        fetch_running_config,
+        log_audit_event,
+        render_intended_config,
+    )
     from synapse_workers.activities.infrahub_activities import fetch_device_config, update_device_status
     from synapse_workers.activities.validation_activities import validate_bgp, validate_interfaces
 
@@ -123,10 +126,13 @@ class DriftRemediationWorkflow:
             start_to_close_timeout=timedelta(seconds=30),
         )
 
-        # 2. Generate intended SR Linux JSON config from Infrahub data
-        # (deterministic — safe to run inside workflow)
-        iface_payload = json.loads(generate_interface_config(device_data["interfaces"]))
-        intended_config_json = json.dumps(iface_payload)
+        # 2. Generate intended SR Linux JSON config via activity
+        # (Jinja2 template rendering involves file I/O — must run in an activity)
+        intended_config_json = await workflow.execute_activity(
+            render_intended_config,
+            args=[device_data["interfaces"]],
+            start_to_close_timeout=timedelta(seconds=10),
+        )
 
         # 3. Fetch running config from device
         running_config_json = await workflow.execute_activity(
@@ -175,16 +181,19 @@ class DriftRemediationWorkflow:
             )
         except Exception as e:
             workflow.logger.error(f"Drift remediation deploy failed on {device_hostname}: {e!s}")
-            await workflow.execute_activity(
-                update_device_status,
-                args=[device_hostname, "maintenance"],
-                start_to_close_timeout=timedelta(seconds=10),
-            )
-            await workflow.execute_activity(
-                log_audit_event,
-                args=["DRIFT_REMEDIATION_FAILED", device_hostname, str(e)],
-                start_to_close_timeout=timedelta(seconds=10),
-            )
+            try:
+                await workflow.execute_activity(
+                    update_device_status,
+                    args=[device_hostname, "maintenance"],
+                    start_to_close_timeout=timedelta(seconds=10),
+                )
+                await workflow.execute_activity(
+                    log_audit_event,
+                    args=["DRIFT_REMEDIATION_FAILED", device_hostname, str(e)],
+                    start_to_close_timeout=timedelta(seconds=10),
+                )
+            except Exception as cleanup_exc:
+                workflow.logger.error(f"Cleanup failed after deploy error on {device_hostname}: {cleanup_exc!s}")
             raise ApplicationError(f"Drift remediation failed for {device_hostname}: {e!s}", non_retryable=True) from e
 
         # 8. Post-remediation validation
@@ -204,11 +213,19 @@ class DriftRemediationWorkflow:
             )
         except Exception as e:
             workflow.logger.error(f"Post-remediation validation failed on {device_hostname}: {e!s}")
-            await workflow.execute_activity(
-                update_device_status,
-                args=[device_hostname, "maintenance"],
-                start_to_close_timeout=timedelta(seconds=10),
-            )
+            try:
+                await workflow.execute_activity(
+                    update_device_status,
+                    args=[device_hostname, "maintenance"],
+                    start_to_close_timeout=timedelta(seconds=10),
+                )
+                await workflow.execute_activity(
+                    log_audit_event,
+                    args=["DRIFT_VALIDATION_FAILED", device_hostname, str(e)],
+                    start_to_close_timeout=timedelta(seconds=10),
+                )
+            except Exception as cleanup_exc:
+                workflow.logger.error(f"Cleanup failed after validation error on {device_hostname}: {cleanup_exc!s}")
             raise ApplicationError(
                 f"Drift remediation failed for {device_hostname}: validation error: {e!s}", non_retryable=True
             ) from e
