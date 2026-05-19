@@ -9,6 +9,8 @@
 #   Supporting:      ~2GB (Redis 256M, RabbitMQ 512M, Temporal 1G, Temporal DB 256M)
 #   Observability:   ~1GB (Prometheus 512M, Grafana 256M)
 
+name: synapse-quattro
+
 x-infrahub-env: &infrahub-env
   INFRAHUB_DB_TYPE: neo4j
   INFRAHUB_DB_ADDRESS: infrahub-database
@@ -115,7 +117,7 @@ services:
 
   infrahub-server:
     image: registry.opsmill.io/opsmill/infrahub:stable
-    command: infrahub server start
+    command: infrahub server start --listen 0.0.0.0
     depends_on:
       - infrahub-database
       - infrahub-cache
