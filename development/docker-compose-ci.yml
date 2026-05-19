@@ -40,7 +40,7 @@ services:
       INFRAHUB_BROKER_PORT: 5672
       INFRAHUB_BROKER_USERNAME: guest
       INFRAHUB_BROKER_PASSWORD: guest
-    command: infrahub server start
+    command: infrahub server start --listen 0.0.0.0
     ports:
       - "8000:8000"
     healthcheck:
