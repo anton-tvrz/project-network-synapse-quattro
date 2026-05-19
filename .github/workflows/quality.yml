@@ -262,6 +262,8 @@ jobs:
   schema-validation:
     name: Schema Validation
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     continue-on-error: true
     needs: [changes]
     if: needs.changes.outputs.schemas == 'true' || needs.changes.outputs.backend == 'true'
@@ -330,6 +332,8 @@ jobs:
   integration-infrahub:
     name: Integration Tests (Infrahub)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     continue-on-error: true
     needs: [unit-tests, changes]
     if: needs.changes.outputs.backend == 'true'
