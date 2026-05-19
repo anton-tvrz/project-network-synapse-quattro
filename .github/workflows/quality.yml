@@ -265,6 +265,11 @@ jobs:
     continue-on-error: true
     needs: [changes]
     if: needs.changes.outputs.schemas == 'true' || needs.changes.outputs.backend == 'true'
+    env:
+      # Matches INFRAHUB_INITIAL_ADMIN_TOKEN in development/docker-compose-ci.yml
+      # so load_schemas.py / populate_sot.py can authenticate via their existing
+      # INFRAHUB_TOKEN support.
+      INFRAHUB_TOKEN: 06438eb2-8019-4776-878c-0941b1f1d1ec
     steps:
       - uses: actions/checkout@v6
         with:
@@ -328,6 +333,11 @@ jobs:
     continue-on-error: true
     needs: [unit-tests, changes]
     if: needs.changes.outputs.backend == 'true'
+    env:
+      # Matches INFRAHUB_INITIAL_ADMIN_TOKEN in development/docker-compose-ci.yml
+      # so load_schemas.py / populate_sot.py / integration tests can authenticate
+      # via their existing INFRAHUB_TOKEN support.
+      INFRAHUB_TOKEN: 06438eb2-8019-4776-878c-0941b1f1d1ec
     steps:
       - uses: actions/checkout@v6
         with:

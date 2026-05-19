@@ -40,6 +40,11 @@ services:
       INFRAHUB_BROKER_PORT: 5672
       INFRAHUB_BROKER_USERNAME: guest
       INFRAHUB_BROKER_PASSWORD: guest
+      # Deterministic bootstrap token so CI scripts (load_schemas.py,
+      # populate_sot.py) can authenticate. Must match the INFRAHUB_TOKEN env
+      # set on the schema-validation / integration-infrahub jobs in
+      # .github/workflows/quality.yml.
+      INFRAHUB_INITIAL_ADMIN_TOKEN: ${INFRAHUB_INITIAL_ADMIN_TOKEN:-06438eb2-8019-4776-878c-0941b1f1d1ec}
     command: infrahub server start --listen 0.0.0.0
     ports:
       - "8000:8000"

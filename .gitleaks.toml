@@ -22,4 +22,9 @@ regexTarget = "match"
 regexes = [
     '''172\.20\.20\.\d+''',   # Containerlab management network (test fixtures)
     '''10\.0\.0\.\d+''',      # Fabric p2p addresses (test fixtures)
+    # Deterministic Infrahub bootstrap tokens (see development/docker-compose-deps.yml
+    # and development/docker-compose-ci.yml). Not real credentials — they only exist
+    # so CI scripts and local dev can authenticate against a freshly-booted Infrahub.
+    '''06438eb2-8019-4776-878c-0941b1f1d1ec''',
+    '''44af444d-3b26-410d-9546-b758657e026c''',
 ]
