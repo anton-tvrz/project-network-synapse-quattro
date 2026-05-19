@@ -35,6 +35,22 @@ BACKUP_CONFIG = '{"srl_nokia-interfaces:interface": [{"name": "ethernet-1/1"}]}'
 # ---------------------------------------------------------------------------
 
 
+# Spy state — activities append their args so tests can assert what was called.
+# Cleared between tests by the autouse _reset_spies fixture below.
+_recorded_status_updates: list[tuple[str, str]] = []
+_recorded_audit_events: list[tuple[str, str, str]] = []
+_recorded_rollback_calls: list[tuple[str, str, str]] = []
+_recorded_store_backup_calls: list[tuple[str, str]] = []
+
+
+@pytest.fixture(autouse=True)
+def _reset_spies() -> None:
+    _recorded_status_updates.clear()
+    _recorded_audit_events.clear()
+    _recorded_rollback_calls.clear()
+    _recorded_store_backup_calls.clear()
+
+
 @activity.defn(name="backup_running_config")
 async def mock_backup(
     device_hostname: str,
@@ -47,7 +63,7 @@ async def mock_backup(
 
 @activity.defn(name="store_backup")
 async def mock_store_backup(device_hostname: str, config: str) -> None:
-    pass
+    _recorded_store_backup_calls.append((device_hostname, config))
 
 
 @activity.defn(name="deploy_config")
@@ -62,6 +78,7 @@ async def mock_deploy_fail(device_hostname: str, ip_address: str, config_json: s
 
 @activity.defn(name="rollback_config")
 async def mock_rollback(device_hostname: str, ip_address: str, backup_config_json: str) -> bool:
+    _recorded_rollback_calls.append((device_hostname, ip_address, backup_config_json))
     return True
 
 
@@ -82,12 +99,12 @@ async def mock_validate_bgp_fail(device_hostname: str, ip_address: str) -> bool:
 
 @activity.defn(name="update_device_status")
 async def mock_update_status(device_hostname: str, status: str) -> None:
-    pass
+    _recorded_status_updates.append((device_hostname, status))
 
 
 @activity.defn(name="log_audit_event")
 async def mock_log_audit(event_type: str, device_hostname: str, details: str) -> None:
-    pass
+    _recorded_audit_events.append((event_type, device_hostname, details))
 
 
 # ---------------------------------------------------------------------------
@@ -197,6 +214,13 @@ async def test_emergency_change_deploy_failure_rolls_back() -> None:
             )
         assert "Emergency deploy failed" in str(exc_info.value.cause)
 
+    # Verify rollback actually ran (not just that the exception message mentioned failure).
+    assert any(call[0] == DEVICE and call[2] == BACKUP_CONFIG for call in _recorded_rollback_calls), (
+        "rollback_config must run on deploy failure"
+    )
+    audit_types = [event[0] for event in _recorded_audit_events]
+    assert "EMERGENCY_DEPLOY_FAILED" in audit_types
+
 
 @pytest.mark.asyncio
 async def test_emergency_change_validation_failure_rolls_back() -> None:
@@ -221,6 +245,13 @@ async def test_emergency_change_validation_failure_rolls_back() -> None:
             )
         assert "Emergency validation failed" in str(exc_info.value.cause)
 
+    # Rollback ran and the validation failure was audited.
+    assert any(call[0] == DEVICE and call[2] == BACKUP_CONFIG for call in _recorded_rollback_calls), (
+        "rollback_config must run on validation failure"
+    )
+    audit_types = [event[0] for event in _recorded_audit_events]
+    assert "EMERGENCY_VALIDATION_FAILED" in audit_types
+
 
 @pytest.mark.asyncio
 async def test_emergency_change_with_ttl_schedules_reversion() -> None:
@@ -239,6 +270,137 @@ async def test_emergency_change_with_ttl_schedules_reversion() -> None:
             EmergencyChangeWorkflow.run,
             args=[_make_input(ttl_seconds=60)],
             id=f"emergency-test-ttl-{DEVICE}",
+            task_queue="test-emergency",
+        )
+        assert result == "EMERGENCY_REVERTED"
+
+
+# ---------------------------------------------------------------------------
+# Resilience: retry policy and guarded post-success calls
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_store_backup_retries_on_transient_failure() -> None:
+    """store_backup should be retried on transient failure (proves a retry policy is wired)."""
+    call_count = 0
+
+    @activity.defn(name="store_backup")
+    async def flaky_store_backup(device_hostname: str, config: str) -> None:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise RuntimeError("transient storage failure")
+
+    activities = [
+        mock_backup,
+        flaky_store_backup,
+        mock_deploy,
+        mock_validate_bgp,
+        mock_validate_interfaces,
+        mock_update_status,
+        mock_log_audit,
+        mock_rollback,
+    ]
+
+    async with (
+        await WorkflowEnvironment.start_local() as env,
+        Worker(
+            env.client,
+            task_queue="test-emergency",
+            workflows=[EmergencyChangeWorkflow],
+            activities=activities,
+        ),
+    ):
+        result = await env.client.execute_workflow(
+            EmergencyChangeWorkflow.run,
+            args=[_make_input()],
+            id=f"emergency-test-store-retry-{DEVICE}",
+            task_queue="test-emergency",
+        )
+        assert result == "EMERGENCY_APPLIED"
+        assert call_count >= 2, "store_backup should have been retried after transient failure"
+
+
+@pytest.mark.asyncio
+async def test_permanent_path_survives_final_status_update_failure() -> None:
+    """If the final update_device_status('active') fails after a successful permanent deploy,
+    the workflow must still report EMERGENCY_APPLIED — the config change already succeeded.
+    """
+    call_count = 0
+
+    @activity.defn(name="update_device_status")
+    async def failing_final_status(device_hostname: str, status: str) -> None:
+        nonlocal call_count
+        call_count += 1
+        # First call ('maintenance' before deploy) succeeds; final call ('active') fails.
+        if status == "active":
+            raise RuntimeError("status backend transiently unavailable")
+
+    activities = [
+        mock_backup,
+        mock_store_backup,
+        mock_deploy,
+        mock_validate_bgp,
+        mock_validate_interfaces,
+        failing_final_status,
+        mock_log_audit,
+        mock_rollback,
+    ]
+
+    async with (
+        await WorkflowEnvironment.start_local() as env,
+        Worker(
+            env.client,
+            task_queue="test-emergency",
+            workflows=[EmergencyChangeWorkflow],
+            activities=activities,
+        ),
+    ):
+        result = await env.client.execute_workflow(
+            EmergencyChangeWorkflow.run,
+            args=[_make_input()],
+            id=f"emergency-test-final-status-fail-{DEVICE}",
+            task_queue="test-emergency",
+        )
+        assert result == "EMERGENCY_APPLIED"
+
+
+@pytest.mark.asyncio
+async def test_ttl_path_survives_post_revert_status_update_failure() -> None:
+    """If update_device_status('active') after a successful TTL revert fails, the workflow
+    must still report EMERGENCY_REVERTED — the config is already correctly reverted.
+    """
+
+    @activity.defn(name="update_device_status")
+    async def failing_post_revert_status(device_hostname: str, status: str) -> None:
+        if status == "active":
+            raise RuntimeError("status backend transiently unavailable")
+
+    activities = [
+        mock_backup,
+        mock_store_backup,
+        mock_deploy,
+        mock_validate_bgp,
+        mock_validate_interfaces,
+        failing_post_revert_status,
+        mock_log_audit,
+        mock_rollback,
+    ]
+
+    async with (
+        await WorkflowEnvironment.start_time_skipping() as env,
+        Worker(
+            env.client,
+            task_queue="test-emergency",
+            workflows=[EmergencyChangeWorkflow],
+            activities=activities,
+        ),
+    ):
+        result = await env.client.execute_workflow(
+            EmergencyChangeWorkflow.run,
+            args=[_make_input(ttl_seconds=60)],
+            id=f"emergency-test-ttl-status-fail-{DEVICE}",
             task_queue="test-emergency",
         )
         assert result == "EMERGENCY_REVERTED"
