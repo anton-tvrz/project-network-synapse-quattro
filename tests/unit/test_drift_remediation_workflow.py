@@ -22,6 +22,11 @@ from synapse_workers.workflows.drift_remediation_workflow import (
     DriftSeverity,
     classify_drift,
 )
+from tests.conftest import (
+    _recorded_audit_events,
+    _recorded_status_updates,
+    _recorded_store_backup_calls,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers — mock activities
@@ -87,7 +92,7 @@ async def mock_validate_interfaces(device_hostname: str, ip_address: str, intend
 
 @activity.defn(name="update_device_status")
 async def mock_update_device_status(device_hostname: str, status: str) -> None:
-    pass
+    _recorded_status_updates.append((device_hostname, status))
 
 
 @activity.defn(name="backup_running_config")
@@ -102,12 +107,12 @@ async def mock_backup_running_config(
 
 @activity.defn(name="store_backup")
 async def mock_store_backup(device_hostname: str, config: str) -> None:
-    pass
+    _recorded_store_backup_calls.append((device_hostname, config))
 
 
 @activity.defn(name="log_audit_event")
 async def mock_log_audit_event(event_type: str, device_hostname: str, details: str) -> None:
-    pass
+    _recorded_audit_events.append((event_type, device_hostname, details))
 
 
 # ---------------------------------------------------------------------------
@@ -257,6 +262,11 @@ async def test_run_when_deploy_fails_raises_application_error() -> None:
             )
         assert "Drift remediation failed" in str(exc_info.value.cause)
 
+    # Failure-path observability: device should be quarantined and the failure audited.
+    assert (DEVICE, "maintenance") in _recorded_status_updates
+    audit_types = [event[0] for event in _recorded_audit_events]
+    assert "DRIFT_REMEDIATION_FAILED" in audit_types
+
 
 @pytest.mark.asyncio
 async def test_run_when_validation_fails_raises_application_error() -> None:
@@ -279,3 +289,58 @@ async def test_run_when_validation_fails_raises_application_error() -> None:
                 task_queue="test-drift",
             )
         assert "validation error" in str(exc_info.value.cause)
+
+    # Failure-path observability: device quarantined and validation failure audited.
+    assert (DEVICE, "maintenance") in _recorded_status_updates
+    audit_types = [event[0] for event in _recorded_audit_events]
+    assert "DRIFT_VALIDATION_FAILED" in audit_types
+
+
+# ---------------------------------------------------------------------------
+# Retry policy on store_backup
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_store_backup_retries_on_transient_failure() -> None:
+    """store_backup should be retried on transient failure (proves a retry policy is wired)."""
+    call_count = 0
+
+    @activity.defn(name="store_backup")
+    async def flaky_store_backup(device_hostname: str, config: str) -> None:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise RuntimeError("transient storage failure")
+
+    activities = [
+        mock_fetch_device_config,
+        mock_render_intended_config,
+        mock_fetch_running_config_drifted,
+        mock_deploy_config,
+        mock_validate_bgp,
+        mock_validate_interfaces,
+        mock_update_device_status,
+        mock_backup_running_config,
+        flaky_store_backup,
+        mock_log_audit_event,
+    ]
+
+    async with (
+        await WorkflowEnvironment.start_local() as env,
+        Worker(
+            env.client,
+            task_queue="test-drift",
+            workflows=[DriftRemediationWorkflow],
+            activities=activities,
+            workflow_runner=UnsandboxedWorkflowRunner(),
+        ),
+    ):
+        result = await env.client.execute_workflow(
+            DriftRemediationWorkflow.run,
+            args=[DEVICE, IP],
+            id=f"drift-test-store-retry-{DEVICE}",
+            task_queue="test-drift",
+        )
+        assert result == "REMEDIATED"
+        assert call_count >= 2, "store_backup should have been retried after transient failure"

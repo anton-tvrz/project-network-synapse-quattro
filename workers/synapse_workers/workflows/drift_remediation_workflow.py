@@ -169,6 +169,7 @@ class DriftRemediationWorkflow:
             store_backup,
             args=[device_hostname, backup_json],
             start_to_close_timeout=timedelta(seconds=10),
+            retry_policy=device_retry_policy,
         )
 
         # 7. Re-deploy intended config

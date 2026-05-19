@@ -20,6 +20,27 @@ from network_synapse.infrahub.models import (
 # For unit tests, fixtures use stable placeholder IPs (mocked, not real).
 
 
+# ---------------------------------------------------------------------------
+# Workflow activity spies
+# ---------------------------------------------------------------------------
+# Module-level lists that mock activity defs in workflow unit tests append to.
+# The autouse `_reset_workflow_spies` fixture clears them between tests so
+# assertions stay isolated.
+
+_recorded_status_updates: list[tuple[str, str]] = []
+_recorded_audit_events: list[tuple[str, str, str]] = []
+_recorded_store_backup_calls: list[tuple[str, str]] = []
+_recorded_rollback_calls: list[tuple[str, str, str]] = []
+
+
+@pytest.fixture(autouse=True)
+def _reset_workflow_spies() -> None:
+    _recorded_status_updates.clear()
+    _recorded_audit_events.clear()
+    _recorded_store_backup_calls.clear()
+    _recorded_rollback_calls.clear()
+
+
 @pytest.fixture
 def sample_device_data():
     """Sample device data matching Infrahub schema (unit tests — mocked)."""

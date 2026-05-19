@@ -94,6 +94,7 @@ class EmergencyChangeWorkflow:
             store_backup,
             args=[device, backup_json],
             start_to_close_timeout=timedelta(seconds=10),
+            retry_policy=device_retry_policy,
         )
 
         # 3. Mark device as emergency status
@@ -189,26 +190,42 @@ class EmergencyChangeWorkflow:
                     f"Emergency TTL revert failed for {device}: {revert_exc!s}", non_retryable=True
                 ) from revert_exc
 
-            await workflow.execute_activity(
-                update_device_status,
-                args=[device, "active"],
-                start_to_close_timeout=timedelta(seconds=10),
-            )
-            await workflow.execute_activity(
-                log_audit_event,
-                args=["EMERGENCY_REVERTED", device, f"auto-reverted after {change_input.ttl_seconds}s TTL"],
-                start_to_close_timeout=timedelta(seconds=10),
-            )
+            # Config is already reverted at this point — surface any housekeeping failure
+            # via logs/audit, but never fail the workflow.
+            try:
+                await workflow.execute_activity(
+                    update_device_status,
+                    args=[device, "active"],
+                    start_to_close_timeout=timedelta(seconds=10),
+                    retry_policy=device_retry_policy,
+                )
+            except Exception as status_exc:
+                workflow.logger.error(f"Failed to mark {device} active after successful TTL revert: {status_exc!s}")
+            try:
+                await workflow.execute_activity(
+                    log_audit_event,
+                    args=["EMERGENCY_REVERTED", device, f"auto-reverted after {change_input.ttl_seconds}s TTL"],
+                    start_to_close_timeout=timedelta(seconds=10),
+                    retry_policy=device_retry_policy,
+                )
+            except Exception as audit_exc:
+                workflow.logger.error(f"Failed to audit EMERGENCY_REVERTED for {device}: {audit_exc!s}")
 
             workflow.logger.info(f"Emergency change auto-reverted on {device}")
             return "EMERGENCY_REVERTED"
 
-        # Permanent emergency change
-        await workflow.execute_activity(
-            update_device_status,
-            args=[device, "active"],
-            start_to_close_timeout=timedelta(seconds=10),
-        )
+        # Permanent emergency change — deploy already succeeded and was audited as
+        # EMERGENCY_APPLIED, so a final status-write failure should be logged but
+        # not fail the workflow.
+        try:
+            await workflow.execute_activity(
+                update_device_status,
+                args=[device, "active"],
+                start_to_close_timeout=timedelta(seconds=10),
+                retry_policy=device_retry_policy,
+            )
+        except Exception as status_exc:
+            workflow.logger.error(f"Failed to mark {device} active after successful emergency deploy: {status_exc!s}")
 
         workflow.logger.info(f"Emergency change applied permanently on {device}")
         return "EMERGENCY_APPLIED"
