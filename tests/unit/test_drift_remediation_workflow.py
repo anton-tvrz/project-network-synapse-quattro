@@ -22,6 +22,11 @@ from synapse_workers.workflows.drift_remediation_workflow import (
     DriftSeverity,
     classify_drift,
 )
+from tests.conftest import (
+    _recorded_audit_events,
+    _recorded_status_updates,
+    _recorded_store_backup_calls,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers — mock activities
@@ -83,20 +88,6 @@ async def mock_validate_bgp_fail(device_hostname: str, ip_address: str) -> bool:
 @activity.defn(name="validate_interfaces")
 async def mock_validate_interfaces(device_hostname: str, ip_address: str, intended_interfaces: list[dict]) -> dict:
     return {"passed": True, "device": device_hostname, "details": []}
-
-
-# Spy state — activities append their args so tests can assert what was called.
-# Cleared between tests by the autouse _reset_spies fixture below.
-_recorded_status_updates: list[tuple[str, str]] = []
-_recorded_audit_events: list[tuple[str, str, str]] = []
-_recorded_store_backup_calls: list[tuple[str, str]] = []
-
-
-@pytest.fixture(autouse=True)
-def _reset_spies() -> None:
-    _recorded_status_updates.clear()
-    _recorded_audit_events.clear()
-    _recorded_store_backup_calls.clear()
 
 
 @activity.defn(name="update_device_status")

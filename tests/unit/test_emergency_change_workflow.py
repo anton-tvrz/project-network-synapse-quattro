@@ -19,6 +19,12 @@ from synapse_workers.workflows.emergency_change_workflow import (
     EmergencyChangeInput,
     EmergencyChangeWorkflow,
 )
+from tests.conftest import (
+    _recorded_audit_events,
+    _recorded_rollback_calls,
+    _recorded_status_updates,
+    _recorded_store_backup_calls,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -33,22 +39,6 @@ BACKUP_CONFIG = '{"srl_nokia-interfaces:interface": [{"name": "ethernet-1/1"}]}'
 # ---------------------------------------------------------------------------
 # Mock activities
 # ---------------------------------------------------------------------------
-
-
-# Spy state — activities append their args so tests can assert what was called.
-# Cleared between tests by the autouse _reset_spies fixture below.
-_recorded_status_updates: list[tuple[str, str]] = []
-_recorded_audit_events: list[tuple[str, str, str]] = []
-_recorded_rollback_calls: list[tuple[str, str, str]] = []
-_recorded_store_backup_calls: list[tuple[str, str]] = []
-
-
-@pytest.fixture(autouse=True)
-def _reset_spies() -> None:
-    _recorded_status_updates.clear()
-    _recorded_audit_events.clear()
-    _recorded_rollback_calls.clear()
-    _recorded_store_backup_calls.clear()
 
 
 @activity.defn(name="backup_running_config")
