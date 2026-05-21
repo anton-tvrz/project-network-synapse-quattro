@@ -1,9 +1,10 @@
 """Temporal activities for backing up device configurations."""
 
-import json
+from __future__ import annotations
 
-from pygnmi.client import gNMIclient
 from temporalio import activity
+
+from synapse_workers.activities._gnmi_io import fetch_config_via_gnmi
 
 
 @activity.defn
@@ -18,26 +19,7 @@ async def backup_running_config(
     Returns config as JSON string.
     """
     activity.logger.info(f"Backing up config for {device_hostname} at {ip_address}")
-
-    try:
-        with gNMIclient(target=(ip_address, 57400), username=username, password=password, insecure=True) as gc:
-            # Issue a GET request for the root path
-            result = gc.get(path=["/"])
-
-            # The payload is nestled inside the protobuf response dictionary
-            if "notification" in result and len(result["notification"]) > 0:
-                for notif in result["notification"]:
-                    if "update" in notif and len(notif["update"]) > 0:
-                        for update in notif["update"]:
-                            if "val" in update:
-                                # Return the raw JSON dictionary dumped to a string
-                                return json.dumps(update["val"])
-
-            raise RuntimeError(f"Unexpected gNMI GET format from {device_hostname}: {result}")
-
-    except Exception as e:
-        activity.logger.error(f"Failed to backup {device_hostname}: {e!s}")
-        raise RuntimeError(f"Backup failed: {e!s}") from e
+    return await fetch_config_via_gnmi(device_hostname, ip_address, username, password)
 
 
 @activity.defn

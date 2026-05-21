@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import json
 
-from pygnmi.client import gNMIclient
 from temporalio import activity
 
 from network_synapse.scripts.generate_configs import generate_interface_config
+from synapse_workers.activities._gnmi_io import fetch_config_via_gnmi
 
 
 @activity.defn
@@ -23,23 +23,7 @@ async def fetch_running_config(
     Returns the configuration as a JSON string for diff comparison.
     """
     activity.logger.info(f"Fetching running config from {device_hostname} ({ip_address}:{port})")
-
-    try:
-        with gNMIclient(target=(ip_address, port), username=username, password=password, insecure=True) as gc:
-            result = gc.get(path=["/"])
-
-            if "notification" in result and len(result["notification"]) > 0:
-                for notif in result["notification"]:
-                    if "update" in notif and len(notif["update"]) > 0:
-                        for update in notif["update"]:
-                            if "val" in update:
-                                return json.dumps(update["val"])
-
-            raise RuntimeError(f"Unexpected gNMI GET format from {device_hostname}: {result}")
-
-    except Exception as e:
-        activity.logger.error(f"Failed to fetch running config from {device_hostname}: {e!s}")
-        raise RuntimeError(f"Fetch running config failed: {e!s}") from e
+    return await fetch_config_via_gnmi(device_hostname, ip_address, username, password, port)
 
 
 @activity.defn
