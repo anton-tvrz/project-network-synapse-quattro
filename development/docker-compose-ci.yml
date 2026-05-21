@@ -77,7 +77,11 @@ services:
       <<: *infrahub-env
       PREFECT_API_DATABASE_CONNECTION_URL: "postgresql+asyncpg://prefect:prefect@infrahub-task-manager-db:5432/prefect"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4200/api/health', timeout=3)"]
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - "import urllib.request; urllib.request.urlopen('http://localhost:4200/api/health', timeout=3)"
       interval: 10s
       timeout: 5s
       retries: 30
