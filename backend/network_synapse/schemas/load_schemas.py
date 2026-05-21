@@ -45,6 +45,7 @@ SCHEMA_LOAD_BATCHES = [
     ],
     # Batch 2: Extensions (depend on base schemas)
     [
+        "library/schema-library/extensions/location_minimal/location_minimal.yml",
         "library/schema-library/extensions/vrf/vrf.yml",
         "library/schema-library/extensions/routing/routing.yml",
         "library/schema-library/extensions/routing_bgp/bgp.yml",
