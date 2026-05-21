@@ -115,7 +115,8 @@ services:
     command: prefect worker start --type infrahubasync --pool infrahub-worker --with-healthcheck
     restart: on-failure
     depends_on:
-      - infrahub-server
+      infrahub-server:
+        condition: service_healthy
     environment:
       <<: *infrahub-env
       INFRAHUB_ADDRESS: http://infrahub-server:8000
