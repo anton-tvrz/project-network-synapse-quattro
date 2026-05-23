@@ -293,15 +293,34 @@ jobs:
 
       - name: Wait for Infrahub health
         run: |
-          echo "Waiting for Infrahub to be ready..."
+          compose() { docker compose -f development/docker-compose-ci.yml "$@"; }
+
+          echo "Waiting for infrahub-server to respond..."
           for i in $(seq 1 180); do
             if curl -sf http://localhost:8000/api/schema/summary > /dev/null 2>&1; then
-              echo "Infrahub ready after ${i}s"
+              echo "infrahub-server ready after ${i}s"
               break
             fi
             if [ "$i" -eq 180 ]; then
-              echo "Infrahub did not become ready in 180s"
-              docker compose -f development/docker-compose-ci.yml logs infrahub-server
+              echo "infrahub-server did not become ready in 180s"
+              compose logs infrahub-server infrahub-task-manager
+              exit 1
+            fi
+            sleep 1
+          done
+
+          # POST /api/schema/load dispatches a Prefect flow — wait until the
+          # task-worker has registered with its pool, otherwise the request
+          # hangs for the full client timeout (see #123).
+          echo "Waiting for infrahub-task-worker to register..."
+          for i in $(seq 1 120); do
+            if compose logs infrahub-task-worker 2>/dev/null | grep -q "Worker .* started"; then
+              echo "infrahub-task-worker registered after ${i}s"
+              break
+            fi
+            if [ "$i" -eq 120 ]; then
+              echo "infrahub-task-worker did not register in 120s"
+              compose logs infrahub-task-worker
               exit 1
             fi
             sleep 1
@@ -363,14 +382,34 @@ jobs:
 
       - name: Wait for Infrahub health
         run: |
-          echo "Waiting for Infrahub to be ready..."
+          compose() { docker compose -f development/docker-compose-ci.yml "$@"; }
+
+          echo "Waiting for infrahub-server to respond..."
           for i in $(seq 1 180); do
             if curl -sf http://localhost:8000/api/schema/summary > /dev/null 2>&1; then
-              echo "Infrahub ready after ${i}s"
+              echo "infrahub-server ready after ${i}s"
               break
             fi
             if [ "$i" -eq 180 ]; then
-              echo "Infrahub did not become ready in 180s"
+              echo "infrahub-server did not become ready in 180s"
+              compose logs infrahub-server infrahub-task-manager
+              exit 1
+            fi
+            sleep 1
+          done
+
+          # POST /api/schema/load dispatches a Prefect flow — wait until the
+          # task-worker has registered with its pool, otherwise the request
+          # hangs for the full client timeout (see #123).
+          echo "Waiting for infrahub-task-worker to register..."
+          for i in $(seq 1 120); do
+            if compose logs infrahub-task-worker 2>/dev/null | grep -q "Worker .* started"; then
+              echo "infrahub-task-worker registered after ${i}s"
+              break
+            fi
+            if [ "$i" -eq 120 ]; then
+              echo "infrahub-task-worker did not register in 120s"
+              compose logs infrahub-task-worker
               exit 1
             fi
             sleep 1
