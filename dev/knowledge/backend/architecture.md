@@ -60,6 +60,23 @@ All extend `infrahub_sdk.checks.InfrahubCheck`. Registered in `.infrahub.yml`.
 - **`srlinux_bgp.j2`** — Renders BGP configuration in SR Linux JSON-RPC/gNMI format.
 - **`srlinux_interfaces.j2`** — Renders interface configuration in SR Linux JSON format.
 
+## Testing Philosophy
+
+This project follows strict TDD (see [ADR-0004](../../adr/0004-tdd-default-methodology.md)): write a failing test, implement the minimum to pass, then refactor. Every component below has a defined test type that proves it works — tests are written *before* the implementation, never after.
+
+| Component | Test type | What the tests prove |
+|-----------|-----------|----------------------|
+| Data layer (`populate_sot.py`, `seed_data.yml`) | Unit | Seed YAML is valid; upserts are idempotent (re-running does not duplicate objects); dependency ordering is respected. |
+| Schema layer (`load_schemas.py`, schema YAML) | Unit | Schema YAML parses and declares the expected attributes; `SCHEMA_LOAD_ORDER` resolves dependencies before dependents. |
+| Infrahub client (`client.py`, `resource_manager.py`, `models.py`) | Unit (mocked httpx) | Query/mutation payloads are well-formed; pool allocation returns the expected resource; Pydantic models validate inputs/outputs. |
+| Transforms (`srlinux_*_transform.py`) | Unit + golden file | Transform output matches expected SR Linux JSON byte-for-byte for a fixed GraphQL input. |
+| Checks (`*_check.py`) | Unit (mock data) | Each check flags the failure case (orphaned rules, duplicate IPs, missing interface data) and passes clean data. |
+| GraphQL queries (`*.gql`) | Unit | Query shape matches what the consuming transform/check expects. |
+| Config generation (`generate_configs.py`, templates) | Unit + golden file | Rendered Jinja2 output matches the committed golden file for known inputs. |
+| Device I/O (`deploy_configs.py`, `validate_configs.py`) | Integration | Device accepts the config via gNMI and post-deploy state matches intent. |
+
+Unit tests live in `tests/unit/` (no external dependencies, fast), golden files in `tests/golden/`, and integration tests in `tests/integration/` (require containerlab + Infrahub). See [adding-schemas.md](../../guides/backend/adding-schemas.md) for the test-first workflow and [python.md](../../guidelines/python.md) for conventions.
+
 ## Key Dependencies
 
 | Package | Purpose |

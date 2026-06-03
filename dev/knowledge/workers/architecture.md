@@ -48,6 +48,19 @@ NetworkChangeWorkflow
   (on failure) -> rollback_config()
 ```
 
+## Testing Philosophy
+
+This project follows strict TDD (see [ADR-0004](../../adr/0004-tdd-default-methodology.md)): a failing test defines the behaviour before any workflow or activity is written. Because workflows orchestrate irreversible device changes, the saga/rollback path is tested with the same rigour as the happy path.
+
+| Component | Test type | What the tests prove |
+|-----------|-----------|----------------------|
+| Workflows (`workflows/`) | Unit (`temporalio.testing.WorkflowEnvironment`) | Activities execute in the correct order; on failure, the workflow triggers compensation (e.g. `rollback_config`); signals and timeouts are handled. Activities are mocked so the test is deterministic and fast. |
+| Activities (`activities/`) | Unit (mocked dependencies) | Each activity honours its input/output contract; Infrahub/gNMI clients are mocked so no real device or API is touched. |
+| Worker registration (`worker.py`) | Unit | All workflows and activities are registered on the `network-changes` task queue. |
+| End-to-end orchestration | Integration | Workflow runs against a real Temporal test server and exercises the full deploy → validate → (rollback) path. |
+
+The saga compensation test is mandatory for any workflow that mutates device state — a workflow is not "done" until its rollback path is proven under a failing activity. Unit tests live in `tests/unit/`, integration tests in `tests/integration/`. See [adding-workflows.md](../../guides/workers/adding-workflows.md) for the test-first workflow.
+
 ## Key Dependencies
 
 | Package | Purpose |
