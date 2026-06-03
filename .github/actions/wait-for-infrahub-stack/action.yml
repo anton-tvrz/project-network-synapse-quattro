@@ -1,0 +1,69 @@
+---
+name: Wait for Infrahub stack
+description: >
+  Wait until the CI Infrahub stack is ready to accept schema loads: the
+  infrahub-server responds and the infrahub-task-worker has registered with
+  its pool. POST /api/schema/load dispatches a Prefect flow, so without a
+  registered worker the request hangs for the full client timeout (see #123).
+
+inputs:
+  compose-file:
+    description: Path to the docker compose file running the stack.
+    required: false
+    default: development/docker-compose-ci.yml
+  server-url:
+    description: URL polled to decide infrahub-server is responding.
+    required: false
+    default: http://localhost:8000/api/schema/summary
+  server-timeout:
+    description: Seconds to wait for infrahub-server to respond.
+    required: false
+    default: "180"
+  worker-timeout:
+    description: Seconds to wait for infrahub-task-worker to register.
+    required: false
+    default: "120"
+
+runs:
+  using: composite
+  steps:
+    - name: Wait for Infrahub health
+      shell: bash
+      env:
+        COMPOSE_FILE_PATH: ${{ inputs.compose-file }}
+        SERVER_URL: ${{ inputs.server-url }}
+        SERVER_TIMEOUT: ${{ inputs.server-timeout }}
+        WORKER_TIMEOUT: ${{ inputs.worker-timeout }}
+      run: |
+        compose() { docker compose -f "$COMPOSE_FILE_PATH" "$@"; }
+
+        echo "Waiting for infrahub-server to respond..."
+        for i in $(seq 1 "$SERVER_TIMEOUT"); do
+          if curl -sf "$SERVER_URL" > /dev/null 2>&1; then
+            echo "infrahub-server ready after ${i}s"
+            break
+          fi
+          if [ "$i" -eq "$SERVER_TIMEOUT" ]; then
+            echo "infrahub-server did not become ready in ${SERVER_TIMEOUT}s"
+            compose logs infrahub-server infrahub-task-manager
+            exit 1
+          fi
+          sleep 1
+        done
+
+        # POST /api/schema/load dispatches a Prefect flow — wait until the
+        # task-worker has registered with its pool, otherwise the request
+        # hangs for the full client timeout (see #123).
+        echo "Waiting for infrahub-task-worker to register..."
+        for i in $(seq 1 "$WORKER_TIMEOUT"); do
+          if compose logs infrahub-task-worker 2>/dev/null | grep -q "Worker .* started"; then
+            echo "infrahub-task-worker registered after ${i}s"
+            break
+          fi
+          if [ "$i" -eq "$WORKER_TIMEOUT" ]; then
+            echo "infrahub-task-worker did not register in ${WORKER_TIMEOUT}s"
+            compose logs infrahub-task-worker
+            exit 1
+          fi
+          sleep 1
+        done
