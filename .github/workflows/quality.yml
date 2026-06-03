@@ -55,7 +55,10 @@ jobs:
   code-quality:
     name: Code Quality
     runs-on: ubuntu-latest
-    needs: [changes]
+    # Correctness first, aesthetics second (#76): lint/format/typecheck only
+    # run after unit tests pass. Shares the python path-filter with unit-tests,
+    # so the two skip or run together.
+    needs: [changes, unit-tests]
     if: needs.changes.outputs.python == 'true'
     steps:
       - uses: actions/checkout@v6
