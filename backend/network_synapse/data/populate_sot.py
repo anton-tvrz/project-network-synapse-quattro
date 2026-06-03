@@ -652,6 +652,7 @@ def populate_ip_prefixes(
             {
                 "prefix": {"value": prefix},
                 "description": {"value": pfx.get("description", "")},
+                "status": {"value": pfx.get("status", "active")},
                 "ip_namespace": {"id": namespace_id},
             },
             label=f"Prefix: {prefix}",

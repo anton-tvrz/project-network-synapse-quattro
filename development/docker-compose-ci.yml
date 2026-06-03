@@ -1,10 +1,39 @@
-# Minimal Infrahub stack for CI schema validation and integration tests
-# No Temporal, telemetry, or app containers — just what's needed to validate schemas/data.
+# Minimal Infrahub stack for CI schema validation and integration tests.
+#
+# Mirrors the Prefect-backed wiring of `docker-compose-deps.yml`: the
+# infrahub-server's `POST /api/schema/load` endpoint dispatches schema
+# application as a Prefect flow, so the task-manager and task-worker must
+# be present or the call hangs until the client-side timeout (see #123).
+#
+# Skipped (vs. the full local stack): Neo4j HTTP UI, Temporal, telemetry,
+# Grafana, app containers, and resource limits — runners size dynamically.
 #
 # Usage:
 #   docker compose -f development/docker-compose-ci.yml up -d
 #   # Wait for health check...
 #   docker compose -f development/docker-compose-ci.yml down -v
+
+x-infrahub-env: &infrahub-env
+  INFRAHUB_DB_TYPE: neo4j
+  INFRAHUB_DB_ADDRESS: infrahub-database
+  INFRAHUB_DB_PORT: 7687
+  INFRAHUB_DB_USERNAME: neo4j
+  INFRAHUB_DB_PASSWORD: infrahub
+  INFRAHUB_CACHE_ADDRESS: infrahub-cache
+  INFRAHUB_CACHE_PORT: 6379
+  INFRAHUB_BROKER_ADDRESS: infrahub-message-queue
+  INFRAHUB_BROKER_PORT: 5672
+  INFRAHUB_BROKER_USERNAME: guest
+  INFRAHUB_BROKER_PASSWORD: guest
+  INFRAHUB_WORKFLOW_ADDRESS: infrahub-task-manager
+  INFRAHUB_WORKFLOW_PORT: 4200
+  # Deterministic bootstrap tokens so CI scripts (load_schemas.py,
+  # populate_sot.py) and the task-worker can authenticate. Must match the
+  # INFRAHUB_TOKEN env set on the schema-validation / integration-infrahub
+  # jobs in .github/workflows/quality.yml.
+  INFRAHUB_INITIAL_ADMIN_TOKEN: ${INFRAHUB_INITIAL_ADMIN_TOKEN:-06438eb2-8019-4776-878c-0941b1f1d1ec}
+  INFRAHUB_INITIAL_AGENT_TOKEN: ${INFRAHUB_INITIAL_AGENT_TOKEN:-44af444d-3b26-410d-9546-b758657e026c}
+  PREFECT_API_URL: http://infrahub-task-manager:4200/api
 
 services:
   infrahub-database:
@@ -22,35 +51,74 @@ services:
   infrahub-message-queue:
     image: rabbitmq:3-management-alpine
 
+  infrahub-task-manager-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: prefect
+      POSTGRES_PASSWORD: prefect
+      POSTGRES_DB: prefect
+    tmpfs:
+      - /var/lib/postgresql/data  # Ephemeral storage for CI speed
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prefect"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  infrahub-task-manager:
+    image: registry.opsmill.io/opsmill/infrahub:stable
+    command: >
+      uvicorn --host 0.0.0.0 --port 4200
+      --factory infrahub.prefect_server.app:create_infrahub_prefect
+    depends_on:
+      infrahub-task-manager-db:
+        condition: service_healthy
+    environment:
+      <<: *infrahub-env
+      PREFECT_API_DATABASE_CONNECTION_URL: "postgresql+asyncpg://prefect:prefect@infrahub-task-manager-db:5432/prefect"
+    healthcheck:
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - "import urllib.request; urllib.request.urlopen('http://localhost:4200/api/health', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
   infrahub-server:
     image: registry.opsmill.io/opsmill/infrahub:stable
-    depends_on:
-      - infrahub-database
-      - infrahub-cache
-      - infrahub-message-queue
-    environment:
-      INFRAHUB_DB_TYPE: neo4j
-      INFRAHUB_DB_ADDRESS: infrahub-database
-      INFRAHUB_DB_PORT: 7687
-      INFRAHUB_DB_USERNAME: neo4j
-      INFRAHUB_DB_PASSWORD: infrahub
-      INFRAHUB_CACHE_ADDRESS: infrahub-cache
-      INFRAHUB_CACHE_PORT: 6379
-      INFRAHUB_BROKER_ADDRESS: infrahub-message-queue
-      INFRAHUB_BROKER_PORT: 5672
-      INFRAHUB_BROKER_USERNAME: guest
-      INFRAHUB_BROKER_PASSWORD: guest
-      # Deterministic bootstrap token so CI scripts (load_schemas.py,
-      # populate_sot.py) can authenticate. Must match the INFRAHUB_TOKEN env
-      # set on the schema-validation / integration-infrahub jobs in
-      # .github/workflows/quality.yml.
-      INFRAHUB_INITIAL_ADMIN_TOKEN: ${INFRAHUB_INITIAL_ADMIN_TOKEN:-06438eb2-8019-4776-878c-0941b1f1d1ec}
     command: infrahub server start --listen 0.0.0.0
+    depends_on:
+      infrahub-database:
+        condition: service_started
+      infrahub-cache:
+        condition: service_started
+      infrahub-message-queue:
+        condition: service_started
+      infrahub-task-manager:
+        condition: service_healthy
+    environment:
+      <<: *infrahub-env
     ports:
-      - "8000:8000"
+      - "${INFRAHUB_CI_PORT:-8000}:8000"
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8000/api/schema/summary"]
       interval: 10s
       timeout: 5s
       retries: 30
       start_period: 60s
+
+  infrahub-task-worker:
+    image: registry.opsmill.io/opsmill/infrahub:stable
+    command: prefect worker start --type infrahubasync --pool infrahub-worker --with-healthcheck
+    restart: on-failure
+    depends_on:
+      infrahub-server:
+        condition: service_healthy
+    environment:
+      <<: *infrahub-env
+      INFRAHUB_ADDRESS: http://infrahub-server:8000
+      INFRAHUB_INTERNAL_ADDRESS: http://infrahub-server:8000
+      INFRAHUB_API_TOKEN: ${INFRAHUB_INITIAL_AGENT_TOKEN:-44af444d-3b26-410d-9546-b758657e026c}
