@@ -96,15 +96,9 @@ async def mock_update_status(device_hostname: str, status: str) -> None:
 
 def _valid_device_data(spine01_device_config) -> dict:
     """Realistic template vars that render valid, hygiene-passing configs."""
-    iface_vars = spine01_device_config.to_interface_template_vars().model_dump()
-    # The hygiene checker only accepts ethernet-*/system* names, so use the
-    # SR Linux system loopback name instead of the fixture's "loopback0".
-    for iface in iface_vars["interfaces"]:
-        if iface["name"] == "loopback0":
-            iface["name"] = "system0"
     return {
         "bgp": spine01_device_config.to_bgp_template_vars().model_dump(),
-        "interfaces": iface_vars,
+        "interfaces": spine01_device_config.to_interface_template_vars().model_dump(),
     }
 
 

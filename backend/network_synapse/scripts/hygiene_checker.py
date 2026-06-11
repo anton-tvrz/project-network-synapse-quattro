@@ -65,7 +65,8 @@ def validate_interface_hygiene(iface_json: str) -> bool:
     """Validate SR Linux Interface JSON payload.
 
     Checks:
-    1. Interfaces have valid names (ethernet-1/* or system0)
+    1. Interfaces have valid names (same convention as the interface
+       consistency check: ethernet-*/system*/loopback*/mgmt*)
     2. Subinterfaces have valid IPv4/IPv6 prefixes
     """
     try:
@@ -76,7 +77,7 @@ def validate_interface_hygiene(iface_json: str) -> bool:
 
         for iface in config.get("interface", []):
             name = iface.get("name", "")
-            if not name.startswith(("ethernet-", "system")):
+            if not name.startswith(("ethernet-", "system", "loopback", "mgmt")):
                 logger.error(f"Hygiene Failed: Invalid interface name format: {name}")
                 return False
 
