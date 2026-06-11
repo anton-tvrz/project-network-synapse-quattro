@@ -99,6 +99,14 @@ class TestInterfaceHygiene:
     def test_system_interface_name_passes(self) -> None:
         assert validate_interface_hygiene(_iface_payload([{"name": "system0", "subinterface": []}])) is True
 
+    def test_loopback_interface_name_passes(self) -> None:
+        """loopback0 is the SoT naming used by seed data and transforms (#135)."""
+        assert validate_interface_hygiene(_iface_payload([{"name": "loopback0", "subinterface": []}])) is True
+
+    def test_mgmt_interface_name_passes(self) -> None:
+        """mgmt0 is valid per the interface consistency check naming convention."""
+        assert validate_interface_hygiene(_iface_payload([{"name": "mgmt0", "subinterface": []}])) is True
+
     def test_invalid_interface_name_fails(self) -> None:
         assert validate_interface_hygiene(_iface_payload([{"name": "wan0", "subinterface": []}])) is False
 
