@@ -1,3 +1,6 @@
 [submodule "library/schema-library"]
 	path = library/schema-library
 	url = https://github.com/opsmill/schema-library.git
+[submodule "dev/skills/temporal-developer"]
+	path = dev/skills/temporal-developer
+	url = https://github.com/temporalio/skill-temporal-developer.git

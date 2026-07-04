@@ -258,7 +258,7 @@ AI agent skills are loaded automatically from `dev/skills/` (symlinked to `.clau
 | **srlinux-gnmi** | `dev/skills/srlinux-gnmi/SKILL.md` | YANG-modelled JSON config (NOT CLI), gNMI SET/GET via pygnmi, interface naming, lab topology |
 | **intent-model** | `dev/skills/intent-model/SKILL.md` | 5-object business intent chain, 3-object operational intent, forward/reverse lineage, override-aware drift |
 | **containerlab** | `dev/skills/containerlab/SKILL.md` | Topology YAML, SR Linux images, OrbStack networking, lab lifecycle, DNS names |
-| **temporal-developer** | `dev/skills/temporal-developer/` (git submodule, planned) | Workflow determinism, activity patterns, retry policies, testing, worker config |
+| **temporal-developer** | `dev/skills/temporal-developer/SKILL.md` (git submodule: [temporalio/skill-temporal-developer](https://github.com/temporalio/skill-temporal-developer)) | Workflow determinism, activity patterns, retry policies, testing, worker config — all Temporal SDKs |
 
 ### Skill Interaction Map
 
