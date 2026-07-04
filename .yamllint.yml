@@ -17,5 +17,6 @@ ignore: |
   .git/
   .venv/
   library/
+  dev/skills/temporal-developer/
   node_modules/
   *.lock

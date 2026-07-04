@@ -76,3 +76,125 @@ groups:
           description: >-
             The Infrahub source-of-truth API has been unreachable for more
             than 2 minutes. Configuration generation workflows will fail.
+
+  # ---------------------------------------------------------------------------
+  # Epic E alert conditions (Issue #80)
+  # ---------------------------------------------------------------------------
+  # Severity routing is handled by alertmanager.yml (critical -> immediate
+  # Slack, warning -> batched, info -> default channel).
+  #
+  # Metric sources:
+  #   up{}                                  -- Prometheus scrape health (prometheus.yml)
+  #   temporal_worker_task_slots_available  -- Temporal SDK worker metrics
+  #   override_revert_failures_total        -- override revert activity counter
+  #   orphaned_rules_total                  -- hygiene checker / posture writer (#70)
+  #   drift_score                           -- SuzieQ custom exporter (#74)
+  #   lineage_coverage_ratio                -- compliance posture writer (#70)
+  #   suzieq_last_poll_timestamp_seconds    -- SuzieQ custom exporter (#74)
+  #   support_tickets_opened_total          -- Golden Path adoption metrics (#77)
+
+  - name: platform_health
+    rules:
+      - alert: PlatformDown
+        expr: up{job=~"infrahub|temporal"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} is down"
+          description: >-
+            Prometheus has been unable to scrape {{ $labels.job }}
+            ({{ $labels.instance }}) for 2 minutes. The automation platform
+            cannot function without it. See docs/runbooks.md.
+
+      - alert: WorkerSaturation
+        expr: temporal_worker_task_slots_available{worker_type="WorkflowWorker"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Temporal worker has no free workflow task slots"
+          description: >-
+            The Temporal worker on task queue {{ $labels.task_queue }} has had
+            zero available workflow task slots for 5 minutes. Workflow starts
+            are queueing; consider scaling workers or investigating stuck
+            workflows.
+
+  - name: intent_compliance
+    rules:
+      - alert: OverrideRevertFailed
+        expr: increase(override_revert_failures_total[15m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Operational override revert failed on {{ $labels.device }}"
+          description: >-
+            An override revert failed in the last 15 minutes. The device may
+            be running non-intended config indefinitely. Manual intervention
+            required — see docs/runbooks.md.
+
+      - alert: OrphanedRulesIncreasing
+        expr: delta(orphaned_rules_total[1h]) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Orphaned rule count is increasing"
+          description: >-
+            The number of deployed config rules with no owning intent has been
+            rising for the last hour ({{ $value }} new orphans). Run the
+            hygiene checker to identify and reap them.
+
+      - alert: DriftScoreElevated
+        expr: drift_score > 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Config drift elevated on {{ $labels.device }}"
+          description: >-
+            Drift score for {{ $labels.device }} has exceeded 0.2 for
+            10 minutes (current: {{ $value }}). Running config is diverging
+            from Infrahub intended state; drift remediation may be failing or
+            overrides may be accumulating.
+
+      - alert: LineageCoverageDrop
+        expr: lineage_coverage_ratio < 0.95
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Intent lineage coverage below 95%"
+          description: >-
+            Less than 95% of deployed config traces back to a business or
+            operational intent (current: {{ $value | humanizePercentage }}).
+            New unmanaged config may have been applied outside the platform.
+
+  - name: telemetry_health
+    rules:
+      - alert: SuzieQStale
+        expr: time() - suzieq_last_poll_timestamp_seconds > 900
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SuzieQ poller data is stale"
+          description: >-
+            SuzieQ has not completed a successful device poll in over
+            15 minutes. Drift detection and state validation are operating
+            on stale data.
+
+  - name: adoption
+    rules:
+      - alert: HighSupportTicketRate
+        expr: rate(support_tickets_opened_total[1d]) * 86400 > 5
+        for: 1h
+        labels:
+          severity: info
+        annotations:
+          summary: "Support ticket rate above 5/day"
+          description: >-
+            More than 5 network-automation support tickets per day over the
+            last 24 hours. The Golden Path may have a usability gap — review
+            recent tickets for common themes.
