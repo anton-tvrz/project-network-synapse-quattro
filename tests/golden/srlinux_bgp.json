@@ -1,0 +1,39 @@
+
+
+{
+    "network-instance": [
+        {
+            "name": "default",
+            "protocols": {
+                "bgp": {
+                    "autonomous-system": 65000,
+                    "router-id": "192.0.2.1",
+                    "group": [
+                        {
+                            "group-name": "underlay",
+                            "export-policy": "export-all",
+                            "import-policy": "import-all"
+                        }
+                    ],
+                    "neighbor": [
+
+                        {
+                            "peer-address": "10.0.0.1",
+                            "peer-as": 65001,
+                            "peer-group": "underlay",
+                            "description": "spine01 to leaf01"
+                        },
+
+                        {
+                            "peer-address": "10.0.0.3",
+                            "peer-as": 65002,
+                            "peer-group": "underlay",
+                            "description": ""
+                        }
+
+                    ]
+                }
+            }
+        }
+    ]
+}

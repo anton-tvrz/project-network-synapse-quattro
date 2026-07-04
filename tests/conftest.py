@@ -1,6 +1,8 @@
 """Shared test fixtures for the network automation project."""
 
+import difflib
 import os
+from pathlib import Path
 
 import pytest
 
@@ -39,6 +41,84 @@ def _reset_workflow_spies() -> None:
     _recorded_audit_events.clear()
     _recorded_store_backup_calls.clear()
     _recorded_rollback_calls.clear()
+
+
+# ---------------------------------------------------------------------------
+# Golden file testing (Issue #93)
+# ---------------------------------------------------------------------------
+# Rendered template output is compared byte-for-byte against a stored golden
+# file in tests/golden/. Template changes fail the comparison until the golden
+# files are deliberately regenerated with `pytest --update-golden`, so every
+# output change is reviewed in the PR diff.
+
+GOLDEN_DIR = Path(__file__).parent / "golden"
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--update-golden",
+        action="store_true",
+        default=False,
+        help="Regenerate golden files from current template output instead of comparing.",
+    )
+
+
+class GoldenFile:
+    """Byte-for-byte comparison of rendered output against a golden file."""
+
+    def __init__(self, golden_dir: Path, update: bool) -> None:
+        self.golden_dir = golden_dir
+        self.update = update
+
+    def assert_match(self, rendered: str, golden_name: str) -> None:
+        """Compare rendered text against tests/golden/<golden_name>.
+
+        In update mode (--update-golden), write the rendered output to the
+        golden file instead and pass.
+        """
+        golden_path = self.golden_dir / golden_name
+
+        if self.update:
+            self.golden_dir.mkdir(parents=True, exist_ok=True)
+            golden_path.write_text(rendered)
+            return
+
+        if not golden_path.exists():
+            raise AssertionError(
+                f"Golden file {golden_path} does not exist. Generate it with: uv run pytest --update-golden"
+            )
+
+        expected = golden_path.read_text()
+        if rendered != expected:
+            diff = "\n".join(
+                difflib.unified_diff(
+                    expected.splitlines(),
+                    rendered.splitlines(),
+                    fromfile=f"golden/{golden_name}",
+                    tofile="rendered",
+                    lineterm="",
+                )
+            )
+            raise AssertionError(
+                f"Rendered output does not match golden file {golden_path}.\n"
+                f"If this change is intentional, regenerate with: uv run pytest --update-golden\n\n{diff}"
+            )
+
+
+@pytest.fixture
+def golden(request: pytest.FixtureRequest) -> GoldenFile:
+    """Golden file helper bound to tests/golden/, honouring --update-golden."""
+    return GoldenFile(GOLDEN_DIR, update=request.config.getoption("--update-golden"))
+
+
+@pytest.fixture
+def make_golden(tmp_path: Path):
+    """Factory for GoldenFile helpers bound to a temp dir (framework self-tests)."""
+
+    def _make(update: bool) -> GoldenFile:
+        return GoldenFile(tmp_path, update=update)
+
+    return _make
 
 
 @pytest.fixture
