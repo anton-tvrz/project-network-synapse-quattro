@@ -93,3 +93,10 @@ def seed_data(ctx: Context, url: str = "http://localhost:8000") -> None:
 def typecheck(ctx: Context) -> None:
     """Run mypy type checking on backend."""
     execute_command(ctx, "mypy backend/", warn=True)
+
+
+@task
+def write_posture(ctx: Context, dry_run: bool = False) -> None:
+    """Write compliance posture (lineage coverage, drift) to InfluxDB. Run hourly via cron."""
+    flag = " --dry-run" if dry_run else ""
+    execute_command(ctx, f"python -m network_synapse.monitoring.compliance_posture{flag}")
