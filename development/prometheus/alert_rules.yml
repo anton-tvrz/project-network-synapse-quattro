@@ -115,8 +115,8 @@ groups:
         annotations:
           summary: "Temporal worker has no free workflow task slots"
           description: >-
-            The Temporal worker on task queue {{ $labels.task_queue }} has had
-            zero available workflow task slots for 5 minutes. Workflow starts
+            The Temporal worker ({{ $labels.instance }}) has had zero
+            available workflow task slots for 5 minutes. Workflow starts
             are queueing; consider scaling workers or investigating stuck
             workflows.
 
@@ -182,7 +182,8 @@ groups:
           summary: "SuzieQ poller data is stale"
           description: >-
             SuzieQ has not completed a successful device poll in over
-            15 minutes. Drift detection and state validation are operating
+            20 minutes (15-minute staleness threshold plus 5 minutes
+            pending). Drift detection and state validation are operating
             on stale data.
 
   - name: adoption
