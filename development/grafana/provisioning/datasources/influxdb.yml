@@ -1,0 +1,20 @@
+# InfluxDB datasource — compliance posture time series (Issue #71)
+# Reads the compliance bucket written hourly by `invoke backend.write-posture`.
+
+apiVersion: 1
+
+datasources:
+  - name: InfluxDB Compliance
+    type: influxdb
+    uid: influxdb-compliance
+    access: proxy
+    url: http://influxdb:8086
+    isDefault: false
+    editable: false
+    jsonData:
+      version: Flux
+      organization: synapse
+      defaultBucket: compliance
+      tlsSkipVerify: true
+    secureJsonData:
+      token: $INFLUXDB_TOKEN
