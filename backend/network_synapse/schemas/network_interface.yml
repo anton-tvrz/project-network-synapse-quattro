@@ -33,3 +33,19 @@ extensions:
               label: Access
               description: "Host-facing access port"
               color: "#D7BDE2"
+        # Intent metadata (Issue #155): ownership, origin, validity
+        - name: owner
+          kind: Text
+          optional: true
+          description: "Team or person accountable for this intent"
+          order_weight: 1520
+        - name: origin
+          kind: Text
+          optional: true
+          description: "Change reference or ticket that introduced this intent"
+          order_weight: 1530
+        - name: valid_until
+          kind: DateTime
+          optional: true
+          description: "Intent validity deadline; unset means permanent (overrides set this)"
+          order_weight: 1540

@@ -54,6 +54,7 @@ SCHEMA_LOAD_BATCHES = [
     [
         "backend/network_synapse/schemas/network_device.yml",
         "backend/network_synapse/schemas/network_interface.yml",
+        "backend/network_synapse/schemas/bgp_session.yml",
     ],
 ]
 

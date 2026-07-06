@@ -19,10 +19,29 @@
 #   - Extension to DcimGenericDevice: adds 'asn' relationship
 #   - Extension to OrganizationGeneric: adds 'asn' relationship
 #
-# No additional custom BGP schema needed — the schema-library extension covers our use case.
-# This file is kept as documentation of the schema architecture.
+# The schema-library extension covers the session modeling itself; this file
+# adds the project's intent metadata attributes (Issue #155) on top.
 ---
 # yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
 version: "1.0"
-# Schema provided by library/schema-library/extensions/routing_bgp/bgp.yml
-# No custom nodes or extensions needed for BGP
+
+extensions:
+  nodes:
+    - kind: RoutingBGPSession
+      attributes:
+        # Intent metadata (Issue #155): ownership, origin, validity
+        - name: owner
+          kind: Text
+          optional: true
+          description: "Team or person accountable for this intent"
+          order_weight: 1520
+        - name: origin
+          kind: Text
+          optional: true
+          description: "Change reference or ticket that introduced this intent"
+          order_weight: 1530
+        - name: valid_until
+          kind: DateTime
+          optional: true
+          description: "Intent validity deadline; unset means permanent (overrides set this)"
+          order_weight: 1540
