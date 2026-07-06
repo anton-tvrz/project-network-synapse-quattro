@@ -134,12 +134,13 @@ Provisioned from `development/grafana/dashboards/` (see
 | 3 | Compliance Tracking | Hygiene pass rate, drift score, Intent Coverage Trend (InfluxDB) | live |
 | 4 | System Health | CPU / memory / disk / network of the platform | live |
 | 5 | Capacity Planning | 7-day utilisation trends, device count, workflow volume | live |
-| 6 | Intent Lifecycle | Business intent funnel from #62 metrics | planned (#66) |
+| 6 | Intent Lifecycle | Lineage coverage headline, intent outcomes, provisioning latency, binding failures, per-device drill-down | live |
 | 7 | Operational Intent | Override activity from #63 metrics | planned (#68) |
 
-The Compliance Tracking dashboard is the only one with two datasources:
-Prometheus for the hygiene panels and the `influxdb-compliance` datasource
-(Flux) for the Intent Coverage Trend panel.
+Compliance Tracking and Intent Lifecycle mix two datasources: Prometheus for
+worker/hygiene metrics and the `influxdb-compliance` datasource (Flux) for
+posture data. The Intent Lifecycle drill-down shows per-device modeling
+completeness until the intent schemas enable true forward/reverse lineage.
 
 ## Alert Rules Reference
 
