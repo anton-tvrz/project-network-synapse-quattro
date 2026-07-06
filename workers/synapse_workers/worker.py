@@ -11,12 +11,18 @@ from synapse_workers.activities.device_backup_activities import backup_running_c
 from synapse_workers.activities.drift_activities import fetch_running_config, log_audit_event, render_intended_config
 from synapse_workers.activities.infrahub_activities import fetch_device_config, update_device_status
 from synapse_workers.activities.validation_activities import validate_bgp, validate_interfaces
+from synapse_workers.metrics import start_metrics_server
 from synapse_workers.workflows.drift_remediation_workflow import DriftRemediationWorkflow
 from synapse_workers.workflows.emergency_change_workflow import EmergencyChangeWorkflow
 from synapse_workers.workflows.network_change_workflow import NetworkChangeWorkflow
 
 
 async def main() -> None:
+    metrics_port = int(os.getenv("WORKER_METRICS_PORT", "9464"))
+    if metrics_port:
+        start_metrics_server(metrics_port)
+        print(f"Metrics exposed on :{metrics_port}/metrics")
+
     temporal_address = os.getenv("TEMPORAL_ADDRESS", "localhost:7233")
     client = await Client.connect(temporal_address)
 

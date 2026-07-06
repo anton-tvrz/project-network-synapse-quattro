@@ -9,6 +9,7 @@ dependencies = [
     "pydantic>=2.5",
     "httpx>=0.25",
     "network-synapse-quattro",
+    "prometheus-client>=0.20",
 ]
 
 [build-system]

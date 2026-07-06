@@ -12,6 +12,7 @@ from temporalio import activity
 
 from network_synapse.infrahub.client import InfrahubConfigClient
 from network_synapse.infrahub.resource_manager import InfrahubResourceManager
+from synapse_workers.metrics import intent_binding_failures_total
 
 
 @activity.defn
@@ -39,6 +40,9 @@ async def fetch_device_config(device_hostname: str) -> dict:
             "bgp": config.to_bgp_template_vars().model_dump(),
             "interfaces": config.to_interface_template_vars().model_dump(),
         }
+    except Exception:
+        intent_binding_failures_total.inc()
+        raise
     finally:
         client.close()
 

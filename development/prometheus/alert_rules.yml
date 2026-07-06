@@ -86,10 +86,10 @@ groups:
   # Metric sources:
   #   up{}                                  -- Prometheus scrape health (prometheus.yml)
   #   temporal_worker_task_slots_available  -- Temporal SDK worker metrics
-  #   override_revert_failures_total        -- override revert activity counter
-  #   orphaned_rules_total                  -- hygiene checker / posture writer (#70)
+  #   override_revert_failures_total        -- override revert activity counter (#63)
+  #   intent_orphaned_rules_count           -- worker intent metrics (#62, synapse_worker job)
   #   drift_score                           -- SuzieQ custom exporter (#74)
-  #   lineage_coverage_ratio                -- compliance posture writer (#70)
+  #   intent_lineage_completeness_ratio     -- worker intent metrics (#62, synapse_worker job)
   #   suzieq_last_poll_timestamp_seconds    -- SuzieQ custom exporter (#74)
   #   support_tickets_opened_total          -- Golden Path adoption metrics (#77)
 
@@ -135,7 +135,7 @@ groups:
             required — see docs/runbooks.md.
 
       - alert: OrphanedRulesIncreasing
-        expr: delta(orphaned_rules_total[1h]) > 0
+        expr: delta(intent_orphaned_rules_count[1h]) > 0
         for: 15m
         labels:
           severity: warning
@@ -160,7 +160,7 @@ groups:
             overrides may be accumulating.
 
       - alert: LineageCoverageDrop
-        expr: lineage_coverage_ratio < 0.95
+        expr: intent_lineage_completeness_ratio < 0.95
         for: 15m
         labels:
           severity: warning
