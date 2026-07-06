@@ -26,6 +26,7 @@ async def fetch_device_config(device_hostname: str) -> dict:
     Returns:
         dict with keys:
             - hostname: device hostname
+            - status: device lifecycle status (drives the drift response policy)
             - bgp: BGPTemplateVars as dict
             - interfaces: InterfacesTemplateVars as dict
     """
@@ -37,6 +38,7 @@ async def fetch_device_config(device_hostname: str) -> dict:
         config = client.get_device_config(device_hostname)
         return {
             "hostname": device_hostname,
+            "status": config.device.status,
             "bgp": config.to_bgp_template_vars().model_dump(),
             "interfaces": config.to_interface_template_vars().model_dump(),
         }

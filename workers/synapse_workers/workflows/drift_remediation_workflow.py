@@ -35,6 +35,15 @@ class DriftSeverity(enum.StrEnum):
     CRITICAL = "critical"
 
 
+class DriftAction(enum.StrEnum):
+    """Response action for detected drift (Issue #154)."""
+
+    NONE = "none"
+    LOG_ONLY = "log_only"
+    SUPPRESS_MAINTENANCE = "suppress_maintenance"
+    REMEDIATE = "remediate"
+
+
 @dataclass
 class DriftResult:
     """Result of comparing intended vs running configuration."""
@@ -84,6 +93,25 @@ def classify_drift(intended_json: str, running_json: str) -> DriftResult:
     return DriftResult(has_drift=True, severity=severity, diff="\n".join(diff_lines))
 
 
+def decide_drift_action(drift: DriftResult, device_status: str) -> DriftAction:
+    """Map drift severity and device status to a response action.
+
+    Deterministic pure function — safe to call inside workflow code.
+
+    Policy: a device in maintenance is never touched (an out-of-band fix
+    during an incident must not be silently reverted); cosmetic drift is
+    audited but not remediated; only critical drift on an active device
+    triggers remediation.
+    """
+    if not drift.has_drift:
+        return DriftAction.NONE
+    if device_status == "maintenance":
+        return DriftAction.SUPPRESS_MAINTENANCE
+    if drift.severity is DriftSeverity.COSMETIC:
+        return DriftAction.LOG_ONLY
+    return DriftAction.REMEDIATE
+
+
 # Retry policy for device communication
 device_retry_policy = RetryPolicy(
     initial_interval=timedelta(seconds=5),
@@ -101,18 +129,24 @@ class DriftRemediationWorkflow:
       1. Fetch intended config from Infrahub
       2. Generate intended SR Linux JSON from Infrahub data
       3. Fetch running config from device via gNMI GET
-      4. Diff intended vs actual — classify drift severity
+      4. Diff intended vs actual — classify severity, decide response action
       5. If no drift: return early
-      6. If drift: backup running config, re-deploy intended, validate
-      7. Report drift event via audit log
+      6. Cosmetic drift: audit only. Device in maintenance: suppress
+         (out-of-band fixes must not be silently reverted)
+      7. Critical drift on an active device: backup running config,
+         re-deploy intended, validate
+      8. Report drift events via audit log
     """
 
     @workflow.run
     async def run(self, device_hostname: str, ip_address: str) -> str:
-        """Execute drift detection and remediation.
+        """Execute drift detection and respond per the drift policy.
 
         Returns:
-            "NO_DRIFT" if configs match, "REMEDIATED" if drift was fixed.
+            "NO_DRIFT" if configs match,
+            "DRIFT_LOGGED" for cosmetic drift (audited, not remediated),
+            "DRIFT_SUPPRESSED_MAINTENANCE" if the device is in maintenance,
+            "REMEDIATED" if critical drift was fixed.
 
         Raises:
             ApplicationError: If remediation deployment or validation fails.
@@ -142,21 +176,44 @@ class DriftRemediationWorkflow:
             retry_policy=device_retry_policy,
         )
 
-        # 4. Classify drift (deterministic — runs in workflow)
+        # 4. Classify drift and decide the response (deterministic — runs in workflow)
         drift = classify_drift(intended_config_json, running_config_json)
+        action = decide_drift_action(drift, device_data.get("status", "active"))
 
-        if not drift.has_drift:
+        if action is DriftAction.NONE:
             workflow.logger.info(f"No drift detected on {device_hostname}")
             return "NO_DRIFT"
 
-        # 5. Drift detected — log and remediate
+        # 5. Drift detected — audit, then act per policy
         workflow.logger.warning(f"Drift detected on {device_hostname}: severity={drift.severity.value}\n{drift.diff}")
 
         await workflow.execute_activity(
             log_audit_event,
-            args=["DRIFT_DETECTED", device_hostname, f"severity={drift.severity.value} diff={drift.diff}"],
+            args=[
+                "DRIFT_DETECTED",
+                device_hostname,
+                f"severity={drift.severity.value} action={action.value} diff={drift.diff}",
+            ],
             start_to_close_timeout=timedelta(seconds=10),
         )
+
+        if action is DriftAction.SUPPRESS_MAINTENANCE:
+            workflow.logger.warning(f"{device_hostname} is in maintenance — drift remediation suppressed")
+            await workflow.execute_activity(
+                log_audit_event,
+                args=["DRIFT_SUPPRESSED_MAINTENANCE", device_hostname, f"severity={drift.severity.value}"],
+                start_to_close_timeout=timedelta(seconds=10),
+            )
+            return "DRIFT_SUPPRESSED_MAINTENANCE"
+
+        if action is DriftAction.LOG_ONLY:
+            workflow.logger.info(f"Cosmetic drift on {device_hostname} — logged, not remediated")
+            await workflow.execute_activity(
+                log_audit_event,
+                args=["DRIFT_LOGGED", device_hostname, f"severity={drift.severity.value}"],
+                start_to_close_timeout=timedelta(seconds=10),
+            )
+            return "DRIFT_LOGGED"
 
         # 6. Backup current (drifted) config before remediation
         backup_json = await workflow.execute_activity(
