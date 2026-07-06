@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import time
+
 from temporalio import activity
 
 from synapse_workers.activities._gnmi_io import deploy_config_via_gnmi
+from synapse_workers.metrics import intent_connectivity_total, intent_provisioning_duration_seconds
 
 # TODO: Add device credential management (env vars or vault)
 # For MVP, we will use Containerlab default SR Linux credentials
@@ -17,6 +20,7 @@ async def deploy_config(device_hostname: str, ip_address: str, config_json: str)
     """Deploy configuration to a network device via gNMI."""
     activity.logger.info(f"Deploying config to {device_hostname} at {ip_address}")
 
+    started = time.monotonic()
     result = await deploy_config_via_gnmi(
         device_hostname=device_hostname,
         ip_address=ip_address,
@@ -26,8 +30,11 @@ async def deploy_config(device_hostname: str, ip_address: str, config_json: str)
     )
 
     if not result:
+        intent_connectivity_total.labels(status="failed").inc()
         raise RuntimeError(f"Config deployment failed for {device_hostname}")
 
+    intent_provisioning_duration_seconds.observe(time.monotonic() - started)
+    intent_connectivity_total.labels(status="deployed").inc()
     return True
 
 
@@ -45,6 +52,8 @@ async def rollback_config(device_hostname: str, ip_address: str, backup_config_j
     )
 
     if not result:
+        intent_connectivity_total.labels(status="rollback_failed").inc()
         raise RuntimeError(f"Rollback failed for {device_hostname}. Device may be in an inconsistent state!")
 
+    intent_connectivity_total.labels(status="rolled_back").inc()
     return True

@@ -22,6 +22,11 @@ scrape_configs:
     static_configs:
       - targets: ["temporal:7233"]
 
+  # Synapse Temporal worker — intent lifecycle metrics (runs on the host)
+  - job_name: "synapse_worker"
+    static_configs:
+      - targets: ["host.docker.internal:9464"]
+
   # Network device probes (blackbox exporter style — placeholder)
   - job_name: "network_devices"
     static_configs:

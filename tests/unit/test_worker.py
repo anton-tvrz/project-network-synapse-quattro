@@ -17,6 +17,12 @@ from synapse_workers.workflows.emergency_change_workflow import EmergencyChangeW
 from synapse_workers.workflows.network_change_workflow import NetworkChangeWorkflow
 
 
+@pytest.fixture(autouse=True)
+def _no_metrics_server(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep worker.main() from binding the real /metrics port in these tests."""
+    monkeypatch.setenv("WORKER_METRICS_PORT", "0")
+
+
 @pytest.mark.asyncio
 async def test_main_connects_with_default_address_and_runs() -> None:
     """With no env override, connect to localhost:7233 and run the worker."""
