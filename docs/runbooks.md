@@ -103,9 +103,15 @@
    - Was there a recent manual change on the device?
    - Was there an out-of-band configuration update?
 
-3. **Remediate:**
+3. **Know what the automation already did.** `DriftRemediationWorkflow` applies a drift response policy:
+   - Device status `maintenance` → remediation **suppressed** (audit event `DRIFT_SUPPRESSED_MAINTENANCE`); out-of-band fixes are never silently reverted
+   - **Cosmetic** drift (e.g. description changes) → audited only (`DRIFT_LOGGED`), not remediated
+   - **Critical** drift on an active device → backed up, re-deployed from intent, validated (`REMEDIATED`)
+
+4. **Remediate what the policy left for you:**
    - If **unintentional**: Re-run the `NetworkChangeWorkflow` to push the correct intent from Infrahub
    - If **intentional**: Update Infrahub to match the new desired state, then re-run the workflow
+   - If suppressed during maintenance: after the window closes, set the device status back to `active` and re-run the drift check
 
 ---
 

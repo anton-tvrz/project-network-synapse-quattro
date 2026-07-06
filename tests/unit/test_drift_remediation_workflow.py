@@ -18,9 +18,11 @@ from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import UnsandboxedWorkflowRunner, Worker
 
 from synapse_workers.workflows.drift_remediation_workflow import (
+    DriftAction,
     DriftRemediationWorkflow,
     DriftSeverity,
     classify_drift,
+    decide_drift_action,
 )
 from tests.conftest import (
     _recorded_audit_events,
@@ -38,6 +40,7 @@ IP = "172.20.20.3"
 INTENDED_CONFIG = '{"interface": [{"name": "ethernet-1/1"}]}'
 RUNNING_CONFIG_CLEAN = '{"interface": [{"name": "ethernet-1/1"}]}'
 RUNNING_CONFIG_DRIFTED = '{"interface": [{"name": "ethernet-1/1", "admin-state": "disable"}]}'
+RUNNING_CONFIG_COSMETIC = '{"interface": [{"name": "ethernet-1/1", "description": "temp note"}]}'
 
 
 @activity.defn(name="fetch_device_config")
@@ -45,9 +48,26 @@ async def mock_fetch_device_config(device_hostname: str) -> dict:
     return {
         "hostname": device_hostname,
         "ip_address": IP,
+        "status": "active",
         "bgp": {"router_id": "10.1.0.1", "local_asn": 65000, "sessions": []},
         "interfaces": {"hostname": device_hostname, "interfaces": [{"name": "ethernet-1/1"}]},
     }
+
+
+@activity.defn(name="fetch_device_config")
+async def mock_fetch_device_config_maintenance(device_hostname: str) -> dict:
+    return {
+        "hostname": device_hostname,
+        "ip_address": IP,
+        "status": "maintenance",
+        "bgp": {"router_id": "10.1.0.1", "local_asn": 65000, "sessions": []},
+        "interfaces": {"hostname": device_hostname, "interfaces": [{"name": "ethernet-1/1"}]},
+    }
+
+
+@activity.defn(name="fetch_running_config")
+async def mock_fetch_running_config_cosmetic(device_hostname: str, ip_address: str) -> str:
+    return RUNNING_CONFIG_COSMETIC
 
 
 @activity.defn(name="render_intended_config")
@@ -128,6 +148,11 @@ class TestClassifyDrift:
         assert result.has_drift is False
         assert result.severity == DriftSeverity.NONE
 
+    def test_drift_severity_when_only_description_changed_returns_cosmetic(self) -> None:
+        result = classify_drift(INTENDED_CONFIG, RUNNING_CONFIG_COSMETIC)
+        assert result.has_drift is True
+        assert result.severity == DriftSeverity.COSMETIC
+
     def test_drift_severity_when_admin_state_changed_returns_critical(self) -> None:
         result = classify_drift(INTENDED_CONFIG, RUNNING_CONFIG_DRIFTED)
         assert result.has_drift is True
@@ -137,6 +162,31 @@ class TestClassifyDrift:
         result = classify_drift(INTENDED_CONFIG, RUNNING_CONFIG_DRIFTED)
         assert result.has_drift is True
         assert result.diff != ""
+
+
+class TestDecideDriftAction:
+    """Drift response policy (Issue #154): severity + device status -> action."""
+
+    def test_no_drift_takes_no_action(self) -> None:
+        drift = classify_drift(INTENDED_CONFIG, RUNNING_CONFIG_CLEAN)
+        assert decide_drift_action(drift, "active") == DriftAction.NONE
+
+    def test_critical_drift_on_active_device_remediates(self) -> None:
+        drift = classify_drift(INTENDED_CONFIG, RUNNING_CONFIG_DRIFTED)
+        assert decide_drift_action(drift, "active") == DriftAction.REMEDIATE
+
+    def test_cosmetic_drift_is_logged_not_remediated(self) -> None:
+        drift = classify_drift(INTENDED_CONFIG, RUNNING_CONFIG_COSMETIC)
+        assert decide_drift_action(drift, "active") == DriftAction.LOG_ONLY
+
+    def test_maintenance_suppresses_remediation_even_for_critical_drift(self) -> None:
+        """An out-of-band fix during maintenance must not be silently reverted."""
+        drift = classify_drift(INTENDED_CONFIG, RUNNING_CONFIG_DRIFTED)
+        assert decide_drift_action(drift, "maintenance") == DriftAction.SUPPRESS_MAINTENANCE
+
+    def test_maintenance_suppresses_cosmetic_drift_too(self) -> None:
+        drift = classify_drift(INTENDED_CONFIG, RUNNING_CONFIG_COSMETIC)
+        assert decide_drift_action(drift, "maintenance") == DriftAction.SUPPRESS_MAINTENANCE
 
 
 # ---------------------------------------------------------------------------
@@ -195,6 +245,32 @@ DRIFT_ACTIVITIES_VALIDATION_FAIL = [
     mock_log_audit_event,
 ]
 
+DRIFT_ACTIVITIES_COSMETIC = [
+    mock_fetch_device_config,
+    mock_render_intended_config,
+    mock_fetch_running_config_cosmetic,
+    mock_deploy_config,
+    mock_validate_bgp,
+    mock_validate_interfaces,
+    mock_update_device_status,
+    mock_backup_running_config,
+    mock_store_backup,
+    mock_log_audit_event,
+]
+
+DRIFT_ACTIVITIES_MAINTENANCE = [
+    mock_fetch_device_config_maintenance,
+    mock_render_intended_config,
+    mock_fetch_running_config_drifted,
+    mock_deploy_config,
+    mock_validate_bgp,
+    mock_validate_interfaces,
+    mock_update_device_status,
+    mock_backup_running_config,
+    mock_store_backup,
+    mock_log_audit_event,
+]
+
 
 @pytest.mark.asyncio
 async def test_run_when_configs_match_returns_no_drift() -> None:
@@ -216,6 +292,57 @@ async def test_run_when_configs_match_returns_no_drift() -> None:
             task_queue="test-drift",
         )
         assert result == "NO_DRIFT"
+
+
+@pytest.mark.asyncio
+async def test_run_when_cosmetic_drift_logs_without_remediating() -> None:
+    """Cosmetic drift is audited but never redeployed (Issue #154)."""
+    async with (
+        await WorkflowEnvironment.start_local() as env,
+        Worker(
+            env.client,
+            task_queue="test-drift",
+            workflows=[DriftRemediationWorkflow],
+            activities=DRIFT_ACTIVITIES_COSMETIC,
+            workflow_runner=UnsandboxedWorkflowRunner(),
+        ),
+    ):
+        result = await env.client.execute_workflow(
+            DriftRemediationWorkflow.run,
+            args=[DEVICE, IP],
+            id=f"drift-test-cosmetic-{DEVICE}",
+            task_queue="test-drift",
+        )
+        assert result == "DRIFT_LOGGED"
+        assert _recorded_store_backup_calls == []
+        event_types = [e[0] for e in _recorded_audit_events]
+        assert "DRIFT_DETECTED" in event_types
+        assert "DRIFT_LOGGED" in event_types
+
+
+@pytest.mark.asyncio
+async def test_run_when_device_in_maintenance_suppresses_remediation() -> None:
+    """Critical drift on a device in maintenance is suppressed, not reverted (Issue #154)."""
+    async with (
+        await WorkflowEnvironment.start_local() as env,
+        Worker(
+            env.client,
+            task_queue="test-drift",
+            workflows=[DriftRemediationWorkflow],
+            activities=DRIFT_ACTIVITIES_MAINTENANCE,
+            workflow_runner=UnsandboxedWorkflowRunner(),
+        ),
+    ):
+        result = await env.client.execute_workflow(
+            DriftRemediationWorkflow.run,
+            args=[DEVICE, IP],
+            id=f"drift-test-maintenance-{DEVICE}",
+            task_queue="test-drift",
+        )
+        assert result == "DRIFT_SUPPRESSED_MAINTENANCE"
+        assert _recorded_store_backup_calls == []
+        event_types = [e[0] for e in _recorded_audit_events]
+        assert "DRIFT_SUPPRESSED_MAINTENANCE" in event_types
 
 
 @pytest.mark.asyncio
