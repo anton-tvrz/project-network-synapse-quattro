@@ -1,0 +1,147 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "description": "Business intent lifecycle for platform + security audiences (Issue #66). Prometheus panels chart the #62 worker metrics; InfluxDB panels read the #70 posture data. The lineage drill-down shows per-device modeling completeness until the intent schemas enable true forward/reverse lineage.",
+  "panels": [
+    {
+      "title": "Lineage Coverage",
+      "description": "Fleet-wide lineage coverage headline (InfluxDB, written hourly by the posture writer). 95% is the LineageCoverageDrop alert threshold.",
+      "type": "stat",
+      "datasource": {"type": "influxdb", "uid": "influxdb-compliance"},
+      "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0},
+      "targets": [
+        {
+          "query": "from(bucket: \"compliance\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"compliance_posture_fleet\" and r._field == \"lineage_coverage_ratio\")\n  |> last()",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "green", "value": 0.95}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Binding Failures",
+      "description": "Intents that failed to bind to device data from Infrahub (24h).",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 6, "x": 6, "y": 0},
+      "targets": [
+        {
+          "expr": "sum(increase(intent_binding_failures_total[24h])) or vector(0)",
+          "legendFormat": "failures (24h)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 5}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Intent Outcomes",
+      "description": "Connectivity intent deployments by outcome status.",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [
+        {
+          "expr": "sum by (status) (increase(intent_connectivity_total[1h]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "short"}}
+    },
+    {
+      "title": "Provisioning Duration",
+      "description": "gNMI SET provisioning latency quantiles from the worker histogram.",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(intent_provisioning_duration_seconds_bucket[1h])))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(intent_provisioning_duration_seconds_bucket[1h])))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(intent_provisioning_duration_seconds_bucket[1h])))",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}}
+    },
+    {
+      "title": "Decommission Age",
+      "description": "Age of intents at decommission time. Contract-only metric today — populates when the decommission flow lands.",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(intent_decommission_age_days_bucket[1d])))",
+          "legendFormat": "p50 age (days)",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(intent_decommission_age_days_bucket[1d])))",
+          "legendFormat": "p95 age (days)",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "d"}}
+    },
+    {
+      "title": "Per-Device Completeness (lineage drill-down)",
+      "description": "Which devices drag lineage coverage down (latest posture per device). Replaced by true forward/reverse intent lineage once the intent schemas land in Infrahub.",
+      "type": "table",
+      "datasource": {"type": "influxdb", "uid": "influxdb-compliance"},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+      "targets": [
+        {
+          "query": "from(bucket: \"compliance\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"compliance_posture\" and r._field == \"completeness\")\n  |> group(columns: [\"device\"])\n  |> last()\n  |> keep(columns: [\"device\", \"device_group\", \"_value\"])\n  |> group()\n  |> sort(columns: [\"_value\"])",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "green", "value": 1}
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["intent", "lifecycle", "compliance"],
+  "time": {"from": "now-24h", "to": "now"},
+  "title": "Intent Lifecycle",
+  "uid": "intent-lifecycle"
+}
