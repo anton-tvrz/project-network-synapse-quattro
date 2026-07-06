@@ -4,6 +4,26 @@ global:
   resolve_timeout: 5m
   slack_api_url: "${SLACK_WEBHOOK_URL}"
 
+# Planned maintenance window (Issue #157) — warnings and info alerts are
+# muted while planned work runs; critical alerts always page.
+# Adjust the window to match the actual change calendar.
+time_intervals:
+  - name: maintenance-window
+    time_intervals:
+      - weekdays: ["sunday"]
+        times:
+          - start_time: "02:00"
+            end_time: "06:00"
+
+# A firing critical alert suppresses warning/info noise for the same
+# instance — one page per incident, not a cascade.
+inhibit_rules:
+  - source_matchers:
+      - 'severity="critical"'
+    target_matchers:
+      - 'severity=~"warning|info"'
+    equal: ["instance"]
+
 route:
   receiver: "slack-default"
   group_by: ["alertname", "device"]
@@ -12,20 +32,27 @@ route:
   repeat_interval: 4h
 
   routes:
-    # Critical alerts — immediate notification
+    # Critical alerts — immediate notification, never muted
     - match:
         severity: critical
       receiver: "slack-critical"
       group_wait: 10s
       repeat_interval: 1h
 
-    # Warning alerts — batched every 15 minutes
+    # Warning alerts — batched every 15 minutes, muted during maintenance
     - match:
         severity: warning
       receiver: "slack-warning"
       group_wait: 1m
       group_interval: 15m
       repeat_interval: 4h
+      mute_time_intervals: ["maintenance-window"]
+
+    # Info alerts — default channel, muted during maintenance
+    - match:
+        severity: info
+      receiver: "slack-default"
+      mute_time_intervals: ["maintenance-window"]
 
 receivers:
   - name: "slack-default"

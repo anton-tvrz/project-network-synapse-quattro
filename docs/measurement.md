@@ -147,9 +147,12 @@ completeness until the intent schemas enable true forward/reverse lineage.
 Defined in `development/prometheus/alert_rules.yml` (13 rules), validated in
 CI by `tests/unit/test_alert_rules.py`, routed by
 `development/prometheus/alertmanager.yml`:
-critical → `#network-synapse-critical` (immediate, repeat 1h);
+critical → `#network-synapse-critical` (immediate, repeat 1h, never muted);
 warning → `#network-synapse-alerts` (batched 15m);
 info → default channel.
+Warning and info alerts are muted during the `maintenance-window` time
+interval (Sunday 02:00–06:00 UTC by default), and a firing critical alert
+inhibits warning/info alerts for the same instance.
 
 | Alert | Severity | Fires when | Metric domain |
 |-------|----------|------------|---------------|
