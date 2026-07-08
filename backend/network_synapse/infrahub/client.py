@@ -95,6 +95,33 @@ mutation UpdateDeviceStatus($data: DcimDeviceUpdateInput!) {
 
 VALID_DEVICE_STATUSES: frozenset[str] = frozenset({"active", "provisioning", "maintenance", "drained"})
 
+QUERY_OVERRIDE = """
+query GetOverride($name: String!) {
+    OperationalOverride(name__value: $name) {
+        edges {
+            node {
+                id
+                status { value }
+            }
+        }
+    }
+}
+"""
+
+MUTATION_UPDATE_OVERRIDE_STATUS = """
+mutation UpdateOverrideStatus($data: OperationalOverrideUpdateInput!) {
+    OperationalOverrideUpdate(data: $data) {
+        ok
+        object {
+            id
+            display_label
+        }
+    }
+}
+"""
+
+VALID_OVERRIDE_STATUSES: frozenset[str] = frozenset({"pending", "active", "reverted", "revert_failed", "cancelled"})
+
 QUERY_DEVICE_BGP_SESSIONS = """
 query GetDeviceBGPSessions($device_ids: [ID!]) {
     RoutingBGPSession(device__ids: $device_ids) {
@@ -403,6 +430,48 @@ class InfrahubConfigClient:
             raise RuntimeError(f"Failed to update status for device '{hostname}': {result}")
 
         return device
+
+    def update_override_status(self, override_name: str, new_status: str) -> str:
+        """Update an OperationalOverride's lifecycle status via GraphQL mutation.
+
+        Resolves the override ID via its unique name, then issues an
+        OperationalOverrideUpdate mutation.
+
+        Args:
+            override_name: Unique name of the OperationalOverride node.
+            new_status: Target status. Must be one of: pending, active,
+                reverted, revert_failed, cancelled.
+
+        Returns:
+            The override's status *before* the update (for audit logging).
+
+        Raises:
+            ValueError: If new_status is not a valid override status.
+            RuntimeError: If the override does not exist or the mutation fails.
+        """
+        if new_status not in VALID_OVERRIDE_STATUSES:
+            msg = (
+                f"Invalid override status '{new_status}'. Must be one of: {', '.join(sorted(VALID_OVERRIDE_STATUSES))}"
+            )
+            raise ValueError(msg)
+
+        lookup = self._graphql(QUERY_OVERRIDE, variables={"name": override_name})
+        edges = lookup.get("OperationalOverride", {}).get("edges", [])
+        if not edges:
+            raise RuntimeError(f"Override '{override_name}' not found in Infrahub")
+        node = edges[0]["node"]
+        previous_status = node["status"]["value"]
+
+        result = self._graphql(
+            MUTATION_UPDATE_OVERRIDE_STATUS,
+            variables={"data": {"id": node["id"], "status": {"value": new_status}}},
+        )
+
+        update_result = result.get("OperationalOverrideUpdate", {})
+        if not update_result.get("ok"):
+            raise RuntimeError(f"Failed to update status for override '{override_name}': {result}")
+
+        return previous_status
 
     def execute_transform(self, transform_name: str, variables: dict[str, Any] | None = None) -> str:
         """Execute an Infrahub Python transform and return the result.

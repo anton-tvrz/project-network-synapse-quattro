@@ -15,6 +15,7 @@ from synapse_workers import worker
 from synapse_workers.workflows.drift_remediation_workflow import DriftRemediationWorkflow
 from synapse_workers.workflows.emergency_change_workflow import EmergencyChangeWorkflow
 from synapse_workers.workflows.network_change_workflow import NetworkChangeWorkflow
+from synapse_workers.workflows.operational_override_workflow import OperationalOverrideWorkflow
 
 
 @pytest.fixture(autouse=True)
@@ -72,9 +73,10 @@ async def test_main_registers_all_workflows_and_activities() -> None:
             NetworkChangeWorkflow,
             DriftRemediationWorkflow,
             EmergencyChangeWorkflow,
+            OperationalOverrideWorkflow,
         }
 
-        # All 11 activities registered (names are stable across the codebase).
+        # All 17 activities registered (names are stable across the codebase).
         activity_names = {fn.__name__ for fn in kwargs["activities"]}
         assert activity_names == {
             "backup_running_config",
@@ -88,4 +90,10 @@ async def test_main_registers_all_workflows_and_activities() -> None:
             "validate_interfaces",
             "log_audit_event",
             "render_intended_config",
+            "apply_override_config",
+            "revert_override_config",
+            "record_override_revert_failure",
+            "check_reversion_safety",
+            "update_override_status",
+            "record_override_extension",
         }

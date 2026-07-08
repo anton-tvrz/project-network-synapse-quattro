@@ -33,6 +33,10 @@ _recorded_status_updates: list[tuple[str, str]] = []
 _recorded_audit_events: list[tuple[str, str, str]] = []
 _recorded_store_backup_calls: list[tuple[str, str]] = []
 _recorded_rollback_calls: list[tuple[str, str, str]] = []
+_recorded_override_status_updates: list[tuple[str, str]] = []
+_recorded_override_revert_calls: list[tuple[str, str, float]] = []
+_recorded_override_revert_failures: list[tuple[str, str]] = []
+_recorded_override_extensions: list[tuple[str, int]] = []
 
 
 @pytest.fixture(autouse=True)
@@ -41,6 +45,10 @@ def _reset_workflow_spies() -> None:
     _recorded_audit_events.clear()
     _recorded_store_backup_calls.clear()
     _recorded_rollback_calls.clear()
+    _recorded_override_status_updates.clear()
+    _recorded_override_revert_calls.clear()
+    _recorded_override_revert_failures.clear()
+    _recorded_override_extensions.clear()
 
 
 # ---------------------------------------------------------------------------
