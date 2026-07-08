@@ -67,6 +67,48 @@ intent_decommission_age_days = Histogram(
     registry=REGISTRY,
 )
 
+# ---------------------------------------------------------------------------
+# Operational intent metrics (Issue #63) — emitted by the override activities
+# ---------------------------------------------------------------------------
+
+override_active_count = Gauge(
+    "override_active_count",
+    "Operational overrides currently active on devices",
+    registry=REGISTRY,
+)
+
+override_auto_revert_success_total = Counter(
+    "override_auto_revert_success",
+    "Overrides successfully auto-reverted to current SoT intent",
+    registry=REGISTRY,
+)
+
+override_auto_revert_failure_total = Counter(
+    "override_auto_revert_failure",
+    "Overrides whose auto-revert failed (device stuck in exception state)",
+    registry=REGISTRY,
+)
+
+override_mean_duration_seconds = Histogram(
+    "override_mean_duration_seconds",
+    "Time an override was active on the device, observed at revert",
+    buckets=(60, 300, 900, 3600, 14400, 86400, 604800, float("inf")),
+    registry=REGISTRY,
+)
+
+override_extension_count_total = Counter(
+    "override_extension_count",
+    "Window extensions granted on operational overrides",
+    registry=REGISTRY,
+)
+
+override_state_validation_result = Gauge(
+    "override_state_validation_result",
+    "Latest reversion-safety validation result per device (1 pass, 0 fail)",
+    ["device"],
+    registry=REGISTRY,
+)
+
 
 def start_metrics_server(port: int) -> None:
     """Expose the worker registry on an HTTP /metrics endpoint."""

@@ -325,6 +325,58 @@ class TestUpdateDeviceStatus:
 
 
 # ---------------------------------------------------------------------------
+# update_override_status
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestUpdateOverrideStatus:
+    """Test the OperationalOverride status update mutation (Issue #48)."""
+
+    def _override_lookup(self, override_id: str = "override-id", status: str = "active") -> dict:
+        return {"OperationalOverride": {"edges": [{"node": {"id": override_id, "status": {"value": status}}}]}}
+
+    def test_invalid_status_raises_value_error(self):
+        client = InfrahubConfigClient(url="http://test:8000", token="tok")
+        with pytest.raises(ValueError, match="Invalid override status 'bogus'"):
+            client.update_override_status("leaf01-drain", "bogus")
+
+    def test_successful_update_returns_previous_status(self):
+        client = InfrahubConfigClient(url="http://test:8000", token="tok")
+        responses = [
+            self._override_lookup(status="active"),
+            {"OperationalOverrideUpdate": {"ok": True}},
+        ]
+        with patch.object(client, "_graphql", side_effect=responses) as mock_gql:
+            previous = client.update_override_status("leaf01-drain", "reverted")
+
+        assert previous == "active"
+        assert mock_gql.call_count == 2
+        variables = mock_gql.call_args.kwargs["variables"]
+        assert variables == {"data": {"id": "override-id", "status": {"value": "reverted"}}}
+
+    def test_unknown_override_raises_runtime_error(self):
+        client = InfrahubConfigClient(url="http://test:8000", token="tok")
+        with (
+            patch.object(client, "_graphql", return_value={"OperationalOverride": {"edges": []}}),
+            pytest.raises(RuntimeError, match="Override 'ghost-drain' not found"),
+        ):
+            client.update_override_status("ghost-drain", "reverted")
+
+    def test_failed_mutation_raises_runtime_error(self):
+        client = InfrahubConfigClient(url="http://test:8000", token="tok")
+        responses = [
+            self._override_lookup(),
+            {"OperationalOverrideUpdate": {"ok": False}},
+        ]
+        with (
+            patch.object(client, "_graphql", side_effect=responses),
+            pytest.raises(RuntimeError, match="Failed to update status for override"),
+        ):
+            client.update_override_status("leaf01-drain", "cancelled")
+
+
+# ---------------------------------------------------------------------------
 # execute_transform
 # ---------------------------------------------------------------------------
 

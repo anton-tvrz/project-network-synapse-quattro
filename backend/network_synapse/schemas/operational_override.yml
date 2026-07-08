@@ -1,0 +1,172 @@
+# Infrahub schema: Operational Intent — time-bounded overrides (Issue #161)
+#
+# Implements the 3-object operational intent model (see the intent-model
+# skill): a deviation from as-built intent that is always time-bounded,
+# accountable, and auditable.
+#
+#   OperationalOverride — the sanctioned deviation (what + why + who)
+#   OverrideWindow      — the time bounds (end_time required, auto-revert)
+#   OverrideAction      — the config change applied (before/after JSON)
+#
+# original_state is captured for audit and manual fallback; the
+# OperationalOverrideWorkflow's auto-revert converges the device to the
+# *current* SoT intent, not this snapshot (agreed in #161).
+#
+# Dependencies: base dcim schema (DcimDevice) must be loaded first.
+---
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+version: "1.0"
+
+nodes:
+  - name: Override
+    namespace: Operational
+    description: "Time-bounded, sanctioned deviation from as-built intent"
+    label: Operational Override
+    icon: mdi:clock-alert-outline
+    default_filter: name__value
+    display_labels:
+      - name__value
+    order_by:
+      - name__value
+    attributes:
+      - name: name
+        kind: Text
+        unique: true
+        description: "Short identifier for this override (e.g. leaf01-drain-2026-07-06)"
+        order_weight: 1000
+      - name: override_type
+        kind: Dropdown
+        description: "Operational scenario this override implements"
+        order_weight: 1100
+        choices:
+          - name: admin_shutdown
+            label: Admin Shutdown
+            description: "Administratively disable an interface or session"
+            color: "#F5B7B1"
+          - name: maintenance_mode
+            label: Maintenance Mode
+            description: "Device-wide maintenance state"
+            color: "#F9E79F"
+          - name: traffic_drain
+            label: Traffic Drain
+            description: "Drain traffic away ahead of planned work"
+            color: "#A9CCE3"
+          - name: emergency_bypass
+            label: Emergency Bypass
+            description: "Incident mitigation deviating from intent"
+            color: "#D98880"
+      - name: status
+        kind: Dropdown
+        description: "Lifecycle state of the override"
+        default_value: pending
+        order_weight: 1200
+        choices:
+          - name: pending
+            label: Pending
+            description: "Created, not yet applied to the device"
+            color: "#D5DBDB"
+          - name: active
+            label: Active
+            description: "Applied to the device, inside the validity window"
+            color: "#A9CCE3"
+          - name: reverted
+            label: Reverted
+            description: "Auto-revert converged the device back to intent"
+            color: "#A2D9CE"
+          - name: revert_failed
+            label: Revert Failed
+            description: "Auto-revert failed — device stuck in exception state"
+            color: "#D98880"
+          - name: cancelled
+            label: Cancelled
+            description: "Reverted early on request, before the window expired"
+            color: "#D7BDE2"
+      - name: reason
+        kind: Text
+        description: "Why this deviation is sanctioned (incident ref, work order)"
+        order_weight: 1300
+      - name: owner
+        kind: Text
+        optional: true
+        description: "Team or person accountable for this override"
+        order_weight: 1310
+      - name: origin
+        kind: Text
+        optional: true
+        description: "Change reference or ticket that introduced this override"
+        order_weight: 1320
+    relationships:
+      - name: device
+        peer: DcimDevice
+        optional: false
+        cardinality: one
+        kind: Attribute
+        description: "Device this override applies to"
+        order_weight: 1400
+      - name: window
+        peer: OverrideWindow
+        optional: false
+        cardinality: one
+        kind: Component
+        description: "Validity window (overrides are always time-bounded)"
+        order_weight: 1410
+      - name: actions
+        peer: OverrideAction
+        optional: true
+        cardinality: many
+        kind: Component
+        description: "Config changes applied under this override"
+        order_weight: 1420
+
+  - name: Window
+    namespace: Override
+    description: "Validity window of an operational override"
+    label: Override Window
+    icon: mdi:calendar-clock
+    display_labels:
+      - end_time__value
+    attributes:
+      - name: start_time
+        kind: DateTime
+        description: "When the override was applied"
+        order_weight: 1000
+      - name: end_time
+        kind: DateTime
+        description: "When the override expires — required; overrides are never open-ended"
+        order_weight: 1010
+      - name: auto_revert
+        kind: Boolean
+        default_value: true
+        description: "Automatically converge back to intent at end_time"
+        order_weight: 1020
+      - name: extension_count
+        kind: Number
+        default_value: 0
+        description: "How many times this window has been extended"
+        order_weight: 1030
+
+  - name: Action
+    namespace: Override
+    description: "A specific config change applied under an operational override"
+    label: Override Action
+    icon: mdi:file-swap-outline
+    display_labels:
+      - target_object__value
+    attributes:
+      - name: action_type
+        kind: Text
+        description: "Kind of change applied (e.g. gnmi_set)"
+        order_weight: 1000
+      - name: target_object
+        kind: Text
+        description: "Config path or object the change targets"
+        order_weight: 1010
+      - name: original_state
+        kind: JSON
+        optional: true
+        description: "State captured before the override (audit / manual fallback)"
+        order_weight: 1020
+      - name: override_state
+        kind: JSON
+        description: "State applied by the override"
+        order_weight: 1030
