@@ -143,6 +143,24 @@ class TestDeployments:
         assert call.kwargs["memo"] == {"initiated_by": "alice"}
         assert call.kwargs["id"].startswith("deploy-leaf01-")
 
+    def test_temporal_connect_failure_is_502(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A Temporal that is unreachable at connect time is a 502, not a 500."""
+
+        async def _refuse(*_args: Any, **_kwargs: Any) -> Any:
+            raise RuntimeError("connection refused")
+
+        monkeypatch.setattr("synapse_presentation.temporal._client", None)
+        monkeypatch.setattr("synapse_presentation.temporal.Client.connect", _refuse)
+        app_client = TestClient(create_app(api_keys=API_KEYS), raise_server_exceptions=False)
+
+        response = app_client.post(
+            "/api/deployments",
+            json=_deploy_payload(),
+            headers={"X-API-Key": OPERATOR_KEY},
+        )
+
+        assert response.status_code == 502
+
     def test_temporal_failure_is_502(self, app_client: TestClient, mock_temporal_client: AsyncMock) -> None:
         mock_temporal_client.start_workflow.side_effect = RuntimeError("temporal unreachable")
 
