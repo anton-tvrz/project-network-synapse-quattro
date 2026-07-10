@@ -30,12 +30,38 @@ _GNMI_TRANSPORT_ERRORS: tuple[type[BaseException], ...] = (
 )
 
 
+# Paths a root-level GET response may label its updates with.
+_ROOT_PATHS = frozenset({None, "", "/"})
+
+
 def _extract_config_payload(result: dict, device_hostname: str) -> str:
+    """Merge every root-level update in the GET response into one config dict.
+
+    Discarding any update would produce a partial backup that silently loses
+    config on rollback (Issue #164). A subtree-scoped update cannot be merged
+    faithfully, so it fails loud here — at backup time, before any change is
+    deployed — rather than corrupting the rollback payload.
+    """
+    merged: dict = {}
+    saw_update = False
     for notif in result.get("notification", []):
         for update in notif.get("update", []):
-            if "val" in update:
-                return json.dumps(update["val"])
-    raise RuntimeError(f"Unexpected gNMI GET format from {device_hostname}: {result}")
+            if "val" not in update:
+                continue
+            path = update.get("path")
+            if path not in _ROOT_PATHS:
+                raise RuntimeError(
+                    f"gNMI GET from {device_hostname} returned non-root update path {path!r}; "
+                    "refusing to build a backup that cannot be restored faithfully"
+                )
+            val = update["val"]
+            if not isinstance(val, dict):
+                raise RuntimeError(f"Unexpected gNMI GET format from {device_hostname}: {result}")
+            merged.update(val)
+            saw_update = True
+    if not saw_update:
+        raise RuntimeError(f"Unexpected gNMI GET format from {device_hostname}: {result}")
+    return json.dumps(merged)
 
 
 def _fetch_config_via_gnmi_sync(
@@ -51,7 +77,10 @@ def _fetch_config_via_gnmi_sync(
         password=password,
         insecure=True,
     ) as gc:
-        result = gc.get(path=["/"])
+        # datatype="config" limits the GET to writable leaves; the default
+        # ("all") includes operational state that SR Linux rejects on SET,
+        # which broke rollback exactly when it was needed (Issue #164).
+        result = gc.get(path=["/"], datatype="config")
     return _extract_config_payload(result, device_hostname)
 
 
@@ -62,10 +91,12 @@ async def fetch_config_via_gnmi(
     password: str = "NokiaSrl1!",  # noqa: S107
     port: int = 57400,
 ) -> str:
-    """Fetch the running config from a device via gNMI GET ``/``.
+    """Fetch the running *config* (writable leaves only) via gNMI GET ``/``.
 
-    Returns the first ``val`` update as a JSON string. Wraps transport
-    errors as ``RuntimeError`` so Temporal sees a consistent failure type.
+    Returns all root-level updates merged into one JSON object — a payload
+    that can be pushed back verbatim as a rollback (Issue #164). Wraps
+    transport errors as ``RuntimeError`` so Temporal sees a consistent
+    failure type.
     """
     try:
         return await asyncio.to_thread(
@@ -86,8 +117,13 @@ async def deploy_config_via_gnmi(
     config_payload: str,
     username: str = "admin",
     password: str = "NokiaSrl1!",  # noqa: S107
+    replace: bool = False,
 ) -> bool:
-    """Push a JSON config payload to a device via gNMI SET."""
+    """Push a JSON config payload to a device via gNMI SET.
+
+    ``replace=True`` restores the device to exactly the payload (rollbacks);
+    the default merges into the existing config (deploys).
+    """
     try:
         return await asyncio.to_thread(
             push_via_gnmi,
@@ -96,6 +132,7 @@ async def deploy_config_via_gnmi(
             config_payload=config_payload,
             username=username,
             password=password,
+            replace=replace,
         )
     except _GNMI_TRANSPORT_ERRORS as e:
         raise RuntimeError(f"gNMI deploy failed for {device_hostname}: {e!s}") from e

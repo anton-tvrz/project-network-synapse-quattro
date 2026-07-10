@@ -56,6 +56,32 @@ class TestRollbackConfig:
 
         assert result is True
 
+    def test_rollback_uses_replace_semantics(self) -> None:
+        """Rollback must restore the backup exactly, not merge into the broken state (Issue #164)."""
+        captured: dict[str, object] = {}
+
+        async def fake_helper(*_args, **kwargs) -> bool:
+            captured.update(kwargs)
+            return True
+
+        with patch.object(config_deployment_activities, "deploy_config_via_gnmi", side_effect=fake_helper):
+            asyncio.run(config_deployment_activities.rollback_config("spine01", "172.20.20.3", '{"backup": true}'))
+
+        assert captured.get("replace") is True
+
+    def test_deploy_uses_merge_semantics(self) -> None:
+        """Forward deploys must NOT replace: generated configs are partial (interfaces + BGP)."""
+        captured: dict[str, object] = {}
+
+        async def fake_helper(*_args, **kwargs) -> bool:
+            captured.update(kwargs)
+            return True
+
+        with patch.object(config_deployment_activities, "deploy_config_via_gnmi", side_effect=fake_helper):
+            asyncio.run(config_deployment_activities.deploy_config("spine01", "172.20.20.3", '{"a": 1}'))
+
+        assert captured.get("replace", False) is False
+
     def test_raises_runtime_error_when_push_returns_false(self) -> None:
         async def fake_helper(*_args, **_kwargs) -> bool:
             return False

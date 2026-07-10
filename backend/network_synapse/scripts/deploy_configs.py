@@ -14,8 +14,15 @@ def deploy_config(
     username: str = "admin",
     password: str = "NokiaSrl1!",  # noqa: S107
     port: int = 57400,
+    replace: bool = False,
 ) -> bool:
     """Deploy a JSON configuration to a Nokia SR Linux device via gNMI.
+
+    ``replace=False`` (deploys) merges the payload into the existing config —
+    generated configs are partial (interfaces + BGP) and must not wipe the
+    rest. ``replace=True`` (rollbacks) restores the device to exactly the
+    payload: a merge would leave config added by the failed change in place
+    (Issue #164).
 
     Transport-level failures (gNMI/gRPC/connection errors) are NOT swallowed:
     they propagate so that :func:`_gnmi_io.deploy_config_via_gnmi` can classify
@@ -25,7 +32,7 @@ def deploy_config(
     acknowledge the SET (or the payload was not valid JSON, so nothing was
     pushed).
     """
-    logger.info(f"Deploying configuration to {hostname} ({ip_address}:{port})")
+    logger.info(f"Deploying configuration to {hostname} ({ip_address}:{port}, replace={replace})")
 
     try:
         config_dict = json.loads(config_payload)
@@ -37,8 +44,8 @@ def deploy_config(
 
     with gNMIclient(target=host, username=username, password=password, insecure=True) as gc:
         logger.debug(f"Successfully connected to gNMI on {hostname}")
-        update_req = [("/", config_dict)]
-        result = gc.set(update=update_req)
+        set_req = [("/", config_dict)]
+        result = gc.set(replace=set_req) if replace else gc.set(update=set_req)
         logger.info(f"gNMI SET response for {hostname}: {result}")
 
         if result.get("response"):

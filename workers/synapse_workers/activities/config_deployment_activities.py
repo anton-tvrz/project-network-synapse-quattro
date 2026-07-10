@@ -49,6 +49,9 @@ async def rollback_config(device_hostname: str, ip_address: str, backup_config_j
         config_payload=backup_config_json,
         username=DEFAULT_USER,
         password=DEFAULT_PASS,
+        # replace, not merge: a merge would keep whatever the failed deploy
+        # added instead of returning to the backed-up baseline (Issue #164)
+        replace=True,
     )
 
     if not result:

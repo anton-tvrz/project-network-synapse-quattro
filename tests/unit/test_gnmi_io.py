@@ -29,6 +29,7 @@ class _FakeGnmiClient:
     """Context-manager fake that records the thread it was entered on."""
 
     captured_thread_id: int | None = None
+    captured_get_kwargs: dict | None = None
     response: dict = _make_gnmi_response({"interfaces": []})
 
     def __init__(self, *_, **__) -> None:
@@ -41,7 +42,8 @@ class _FakeGnmiClient:
     def __exit__(self, *_) -> bool:
         return False
 
-    def get(self, path: list[str]) -> dict:
+    def get(self, path: list[str], **kwargs) -> dict:
+        _FakeGnmiClient.captured_get_kwargs = {"path": path, **kwargs}
         return self.response
 
 
@@ -51,7 +53,72 @@ class TestFetchConfigViaGnmi:
 
     def setup_method(self) -> None:
         _FakeGnmiClient.captured_thread_id = None
+        _FakeGnmiClient.captured_get_kwargs = None
         _FakeGnmiClient.response = _make_gnmi_response({"interfaces": [{"name": "ethernet-1/1"}]})
+
+    def test_requests_config_datastore_only(self) -> None:
+        """Backups must GET only writable config (Issue #164).
+
+        A default GET of ``/`` returns operational/read-only state (counters,
+        oper-state, uptime) that SR Linux rejects on SET — making the backup
+        useless as a rollback payload.
+        """
+        with patch.object(_gnmi_io, "gNMIclient", _FakeGnmiClient):
+            asyncio.run(_gnmi_io.fetch_config_via_gnmi("spine01", "172.20.20.3"))
+
+        assert _FakeGnmiClient.captured_get_kwargs is not None
+        assert _FakeGnmiClient.captured_get_kwargs.get("datatype") == "config"
+
+    def test_merges_all_updates_across_notifications(self) -> None:
+        """Every update in every notification must land in the backup (Issue #164)."""
+        _FakeGnmiClient.response = {
+            "notification": [
+                {"update": [{"path": "", "val": {"interfaces": [{"name": "ethernet-1/1"}]}}]},
+                {"update": [{"path": "", "val": {"network-instance": [{"name": "default"}]}}]},
+            ]
+        }
+
+        with patch.object(_gnmi_io, "gNMIclient", _FakeGnmiClient):
+            result = asyncio.run(_gnmi_io.fetch_config_via_gnmi("spine01", "172.20.20.3"))
+
+        assert json.loads(result) == {
+            "interfaces": [{"name": "ethernet-1/1"}],
+            "network-instance": [{"name": "default"}],
+        }
+
+    def test_merges_multiple_updates_within_one_notification(self) -> None:
+        _FakeGnmiClient.response = {
+            "notification": [
+                {
+                    "update": [
+                        {"path": "/", "val": {"interfaces": []}},
+                        {"path": "/", "val": {"system": {"name": {"host-name": "spine01"}}}},
+                    ]
+                }
+            ]
+        }
+
+        with patch.object(_gnmi_io, "gNMIclient", _FakeGnmiClient):
+            result = asyncio.run(_gnmi_io.fetch_config_via_gnmi("spine01", "172.20.20.3"))
+
+        assert json.loads(result) == {"interfaces": [], "system": {"name": {"host-name": "spine01"}}}
+
+    def test_non_root_update_path_fails_loud(self) -> None:
+        """A subtree-scoped update cannot be merged safely — fail at backup time.
+
+        Failing here aborts the change BEFORE anything is deployed; silently
+        mis-nesting the subtree would instead corrupt the rollback payload and
+        surface only after a failed deploy (Issue #164).
+        """
+        _FakeGnmiClient.response = {
+            "notification": [{"update": [{"path": "interface[name=ethernet-1/1]", "val": {"mtu": 9000}}]}]
+        }
+
+        with (
+            patch.object(_gnmi_io, "gNMIclient", _FakeGnmiClient),
+            pytest.raises(RuntimeError, match="non-root"),
+        ):
+            asyncio.run(_gnmi_io.fetch_config_via_gnmi("spine01", "172.20.20.3"))
 
     def test_returns_first_val_as_json_string(self) -> None:
         payload = {"interfaces": [{"name": "ethernet-1/1"}]}
@@ -163,4 +230,18 @@ class TestDeployConfigViaGnmi:
             "config_payload": '{"a": 1}',
             "username": "u",
             "password": "p",
+            "replace": False,
         }
+
+    def test_replace_flag_reaches_push_helper(self) -> None:
+        """Rollbacks need replace semantics end-to-end (Issue #164)."""
+        captured: dict[str, object] = {}
+
+        def fake_push(**kwargs) -> bool:
+            captured.update(kwargs)
+            return True
+
+        with patch.object(_gnmi_io, "push_via_gnmi", fake_push):
+            asyncio.run(_gnmi_io.deploy_config_via_gnmi("spine01", "172.20.20.3", '{"a": 1}', replace=True))
+
+        assert captured["replace"] is True
