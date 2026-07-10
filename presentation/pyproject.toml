@@ -1,0 +1,20 @@
+[project]
+name = "network-synapse-quattro-presentation"
+version = "0.1.0"
+description = "Network Synapse Quattro presentation layer — authenticated self-service initiation of automation workflows (ADR-0005)"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "temporalio>=1.4",
+    "pydantic>=2.5",
+    "network-synapse-quattro-workers",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["synapse_presentation"]
