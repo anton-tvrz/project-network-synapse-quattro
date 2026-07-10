@@ -1,9 +1,10 @@
 # =============================================================================
 # Network Synapse Quattro — Root workspace configuration
 # =============================================================================
-# Monorepo workspace managed by uv. Two packages:
-#   - backend/  (network-synapse-quattro)         Main backend: Infrahub SoT, config gen, schema mgmt
-#   - workers/  (network-synapse-quattro-workers)  Temporal workflow workers
+# Monorepo workspace managed by uv. Three packages:
+#   - backend/       (network-synapse-quattro)              Main backend: Infrahub SoT, config gen, schema mgmt
+#   - workers/       (network-synapse-quattro-workers)      Temporal workflow workers
+#   - presentation/  (network-synapse-quattro-presentation) Self-service FastAPI portal (ADR-0005)
 #
 # Setup:   uv sync --all-groups
 # Test:    uv run invoke backend.test-unit
@@ -20,6 +21,7 @@ license = "Apache-2.0"
 dependencies = [
     "network-synapse-quattro",
     "network-synapse-quattro-workers",
+    "network-synapse-quattro-presentation",
 ]
 
 [dependency-groups]
@@ -59,9 +61,10 @@ dev = [
 [tool.uv.sources]
 network-synapse-quattro = { workspace = true }
 network-synapse-quattro-workers = { workspace = true }
+network-synapse-quattro-presentation = { workspace = true }
 
 [tool.uv.workspace]
-members = ["backend", "workers"]
+members = ["backend", "workers", "presentation"]
 
 # =============================================================================
 # Ruff — replaces black, isort, pylint, flake8
