@@ -41,6 +41,29 @@ class TestDeployConfig:
         with patch.object(deploy_configs, "gNMIclient", factory):
             assert deploy_configs.deploy_config("spine01", "172.20.20.3", '{"a": 1}') is True
 
+    def test_default_set_uses_update_semantics(self) -> None:
+        """Normal deploys merge into the existing config (gNMI update)."""
+        factory = _fake_client({"response": [{"path": "/", "op": "UPDATE"}]})
+        with patch.object(deploy_configs, "gNMIclient", factory):
+            deploy_configs.deploy_config("spine01", "172.20.20.3", '{"a": 1}')
+
+        gc = factory.return_value.__enter__.return_value
+        gc.set.assert_called_once_with(update=[("/", {"a": 1})])
+
+    def test_replace_flag_uses_replace_semantics(self) -> None:
+        """Rollbacks must RESTORE, not merge (Issue #164).
+
+        A root ``update`` leaves config added by the failed deploy in place;
+        ``replace`` returns the device to exactly the backed-up state.
+        """
+        factory = _fake_client({"response": [{"path": "/", "op": "REPLACE"}]})
+        with patch.object(deploy_configs, "gNMIclient", factory):
+            result = deploy_configs.deploy_config("spine01", "172.20.20.3", '{"a": 1}', replace=True)
+
+        assert result is True
+        gc = factory.return_value.__enter__.return_value
+        gc.set.assert_called_once_with(replace=[("/", {"a": 1})])
+
     def test_missing_response_returns_false(self) -> None:
         factory = _fake_client({"unexpected": True})
         with patch.object(deploy_configs, "gNMIclient", factory):
