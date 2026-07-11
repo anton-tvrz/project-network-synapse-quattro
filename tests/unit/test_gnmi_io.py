@@ -30,10 +30,11 @@ class _FakeGnmiClient:
 
     captured_thread_id: int | None = None
     captured_get_kwargs: dict | None = None
+    captured_init_kwargs: dict | None = None
     response: dict = _make_gnmi_response({"interfaces": []})
 
-    def __init__(self, *_, **__) -> None:
-        pass
+    def __init__(self, *_, **kwargs) -> None:
+        _FakeGnmiClient.captured_init_kwargs = kwargs
 
     def __enter__(self) -> _FakeGnmiClient:
         _FakeGnmiClient.captured_thread_id = threading.get_ident()
@@ -54,7 +55,33 @@ class TestFetchConfigViaGnmi:
     def setup_method(self) -> None:
         _FakeGnmiClient.captured_thread_id = None
         _FakeGnmiClient.captured_get_kwargs = None
+        _FakeGnmiClient.captured_init_kwargs = None
         _FakeGnmiClient.response = _make_gnmi_response({"interfaces": [{"name": "ethernet-1/1"}]})
+
+    def test_tls_mode_from_environment_reaches_client(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """GNMI_TLS_MODE must control the transport — insecure is not baked in (Issue #166)."""
+        monkeypatch.setenv("GNMI_TLS_MODE", "skip-verify")
+
+        with patch.object(_gnmi_io, "gNMIclient", _FakeGnmiClient):
+            asyncio.run(_gnmi_io.fetch_config_via_gnmi("spine01", "172.20.20.3"))
+
+        kwargs = _FakeGnmiClient.captured_init_kwargs
+        assert kwargs is not None
+        assert kwargs.get("skip_verify") is True
+        assert "insecure" not in kwargs
+
+    def test_credentials_resolved_from_environment_when_not_passed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Secrets come from the worker's environment, not from callers (Issue #166)."""
+        monkeypatch.setenv("GNMI_USERNAME", "svc-automation")
+        monkeypatch.setenv("GNMI_PASSWORD", "from-env")
+
+        with patch.object(_gnmi_io, "gNMIclient", _FakeGnmiClient):
+            asyncio.run(_gnmi_io.fetch_config_via_gnmi("spine01", "172.20.20.3"))
+
+        kwargs = _FakeGnmiClient.captured_init_kwargs
+        assert kwargs is not None
+        assert kwargs.get("username") == "svc-automation"
+        assert kwargs.get("password") == "from-env"
 
     def test_requests_config_datastore_only(self) -> None:
         """Backups must GET only writable config (Issue #164).
@@ -102,6 +129,25 @@ class TestFetchConfigViaGnmi:
             result = asyncio.run(_gnmi_io.fetch_config_via_gnmi("spine01", "172.20.20.3"))
 
         assert json.loads(result) == {"interfaces": [], "system": {"name": {"host-name": "spine01"}}}
+
+    def test_overlapping_top_level_keys_fail_loud(self) -> None:
+        """Two root updates sharing a top-level key cannot be merged shallowly.
+
+        Silently letting the later update win would drop part of the earlier
+        one — a corrupted backup that only surfaces at rollback time.
+        """
+        _FakeGnmiClient.response = {
+            "notification": [
+                {"update": [{"path": "", "val": {"interfaces": [{"name": "ethernet-1/1"}]}}]},
+                {"update": [{"path": "", "val": {"interfaces": [{"name": "ethernet-1/2"}]}}]},
+            ]
+        }
+
+        with (
+            patch.object(_gnmi_io, "gNMIclient", _FakeGnmiClient),
+            pytest.raises(RuntimeError, match="overlapping"),
+        ):
+            asyncio.run(_gnmi_io.fetch_config_via_gnmi("spine01", "172.20.20.3"))
 
     def test_non_root_update_path_fails_loud(self) -> None:
         """A subtree-scoped update cannot be merged safely — fail at backup time.

@@ -14,16 +14,17 @@ from synapse_workers.activities._gnmi_io import fetch_config_via_gnmi
 async def fetch_running_config(
     device_hostname: str,
     ip_address: str,
-    username: str = "admin",
-    password: str = "NokiaSrl1!",  # noqa: S107
     port: int = 57400,
 ) -> str:
     """Fetch the current running config from a device via gNMI GET.
 
     Returns the configuration as a JSON string for diff comparison.
+    Credentials are resolved from the worker's environment inside the gNMI
+    helper — never accepted as arguments, which Temporal would persist in
+    workflow history (Issue #166).
     """
     activity.logger.info(f"Fetching running config from {device_hostname} ({ip_address}:{port})")
-    return await fetch_config_via_gnmi(device_hostname, ip_address, username, password, port)
+    return await fetch_config_via_gnmi(device_hostname, ip_address, port=port)
 
 
 @activity.defn

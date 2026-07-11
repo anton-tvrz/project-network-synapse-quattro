@@ -34,10 +34,9 @@ from synapse_workers.metrics import (
     override_state_validation_result,
 )
 
-# TODO: Add device credential management (env vars or vault)
-# For MVP, we will use Containerlab default SR Linux credentials
-DEFAULT_USER = "admin"
-DEFAULT_PASS = "NokiaSrl1!"  # noqa: S105
+# Credentials are resolved inside the gNMI helper from the worker's
+# environment (network_synapse.gnmi_settings) — never passed through
+# activity arguments, which Temporal persists in workflow history (#166).
 
 
 @activity.defn
@@ -53,8 +52,6 @@ async def apply_override_config(device_hostname: str, ip_address: str, override_
         device_hostname=device_hostname,
         ip_address=ip_address,
         config_payload=override_config_json,
-        username=DEFAULT_USER,
-        password=DEFAULT_PASS,
     )
 
     if not result:
@@ -92,8 +89,6 @@ async def revert_override_config(
         device_hostname=device_hostname,
         ip_address=ip_address,
         config_payload=intended_config_json,
-        username=DEFAULT_USER,
-        password=DEFAULT_PASS,
     )
 
     if not result:
