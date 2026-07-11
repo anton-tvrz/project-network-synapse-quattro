@@ -7,6 +7,8 @@ from typing import Any, TypedDict
 
 from pygnmi.client import gNMIclient
 
+from network_synapse.gnmi_settings import gnmi_connection_kwargs, resolve_credentials
+
 logger = logging.getLogger(__name__)
 
 
@@ -47,14 +49,17 @@ def _evaluate_bgp_neighbors(ip_address: str, neighbors: Any) -> bool:
 
 def check_bgp_summary(
     ip_address: str,
-    username: str = "admin",
-    password: str = "NokiaSrl1!",  # noqa: S107
+    username: str | None = None,
+    password: str | None = None,
     port: int = 57400,
 ) -> bool:
     """Check if all configured BGP sessions are Established."""
     logger.info(f"Checking BGP state on {ip_address}")
+    username, password = resolve_credentials(username, password)
     try:
-        with gNMIclient(target=(ip_address, port), username=username, password=password, insecure=True) as gc:
+        with gNMIclient(
+            target=(ip_address, port), username=username, password=password, **gnmi_connection_kwargs()
+        ) as gc:
             path = "/network-instance[name=default]/protocols/bgp/neighbor"
             result = gc.get(path=[path], datatype="state")
 
@@ -188,8 +193,8 @@ def _evaluate_interface_state(
 def check_interface_state(
     ip_address: str,
     intended_interfaces: list[dict],
-    username: str = "admin",
-    password: str = "NokiaSrl1!",  # noqa: S107
+    username: str | None = None,
+    password: str | None = None,
     port: int = 57400,
 ) -> dict:
     """Check if device interface states match intended config.
@@ -202,8 +207,11 @@ def check_interface_state(
         dict with keys: passed (bool), device (str), details (list[dict]).
     """
     logger.info(f"Checking interface state on {ip_address}")
+    username, password = resolve_credentials(username, password)
     try:
-        with gNMIclient(target=(ip_address, port), username=username, password=password, insecure=True) as gc:
+        with gNMIclient(
+            target=(ip_address, port), username=username, password=password, **gnmi_connection_kwargs()
+        ) as gc:
             result = gc.get(path=["/interface[name=*]"], datatype="state")
 
             gnmi_interfaces = _extract_gnmi_val(result)

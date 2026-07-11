@@ -9,10 +9,9 @@ from temporalio import activity
 from synapse_workers.activities._gnmi_io import deploy_config_via_gnmi
 from synapse_workers.metrics import intent_connectivity_total, intent_provisioning_duration_seconds
 
-# TODO: Add device credential management (env vars or vault)
-# For MVP, we will use Containerlab default SR Linux credentials
-DEFAULT_USER = "admin"
-DEFAULT_PASS = "NokiaSrl1!"  # noqa: S105
+# Credentials are resolved inside the gNMI helper from the worker's
+# environment (network_synapse.gnmi_settings) — never passed through
+# activity arguments, which Temporal persists in workflow history (#166).
 
 
 @activity.defn
@@ -25,8 +24,6 @@ async def deploy_config(device_hostname: str, ip_address: str, config_json: str)
         device_hostname=device_hostname,
         ip_address=ip_address,
         config_payload=config_json,
-        username=DEFAULT_USER,
-        password=DEFAULT_PASS,
     )
 
     if not result:
@@ -47,8 +44,6 @@ async def rollback_config(device_hostname: str, ip_address: str, backup_config_j
         device_hostname=device_hostname,
         ip_address=ip_address,
         config_payload=backup_config_json,
-        username=DEFAULT_USER,
-        password=DEFAULT_PASS,
         # replace, not merge: a merge would keep whatever the failed deploy
         # added instead of returning to the backed-up baseline (Issue #164)
         replace=True,

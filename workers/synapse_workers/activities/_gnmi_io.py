@@ -17,6 +17,7 @@ import json
 import grpc
 from pygnmi.client import gNMIclient, gNMIException
 
+from network_synapse.gnmi_settings import gnmi_connection_kwargs, resolve_credentials
 from network_synapse.scripts.deploy_configs import deploy_config as push_via_gnmi
 
 # Errors we expect from a gRPC/gNMI round-trip against a real device.
@@ -57,6 +58,13 @@ def _extract_config_payload(result: dict, device_hostname: str) -> str:
             val = update["val"]
             if not isinstance(val, dict):
                 raise RuntimeError(f"Unexpected gNMI GET format from {device_hostname}: {result}")
+            overlap = merged.keys() & val.keys()
+            if overlap:
+                raise RuntimeError(
+                    f"gNMI GET from {device_hostname} returned overlapping top-level keys "
+                    f"{sorted(overlap)} across updates; refusing to build a backup that "
+                    "would silently drop config"
+                )
             merged.update(val)
             saw_update = True
     if not saw_update:
@@ -67,15 +75,16 @@ def _extract_config_payload(result: dict, device_hostname: str) -> str:
 def _fetch_config_via_gnmi_sync(
     device_hostname: str,
     ip_address: str,
-    username: str,
-    password: str,
+    username: str | None,
+    password: str | None,
     port: int,
 ) -> str:
+    username, password = resolve_credentials(username, password)
     with gNMIclient(
         target=(ip_address, port),
         username=username,
         password=password,
-        insecure=True,
+        **gnmi_connection_kwargs(),
     ) as gc:
         # datatype="config" limits the GET to writable leaves; the default
         # ("all") includes operational state that SR Linux rejects on SET,
@@ -87,8 +96,8 @@ def _fetch_config_via_gnmi_sync(
 async def fetch_config_via_gnmi(
     device_hostname: str,
     ip_address: str,
-    username: str = "admin",
-    password: str = "NokiaSrl1!",  # noqa: S107
+    username: str | None = None,
+    password: str | None = None,
     port: int = 57400,
 ) -> str:
     """Fetch the running *config* (writable leaves only) via gNMI GET ``/``.
@@ -97,6 +106,10 @@ async def fetch_config_via_gnmi(
     that can be pushed back verbatim as a rollback (Issue #164). Wraps
     transport errors as ``RuntimeError`` so Temporal sees a consistent
     failure type.
+
+    Credentials default to the worker's environment (Issue #166); the explicit
+    parameters exist for tests and standalone scripts, never for activity
+    callers — activity arguments are persisted in Temporal history.
     """
     try:
         return await asyncio.to_thread(
@@ -115,8 +128,8 @@ async def deploy_config_via_gnmi(
     device_hostname: str,
     ip_address: str,
     config_payload: str,
-    username: str = "admin",
-    password: str = "NokiaSrl1!",  # noqa: S107
+    username: str | None = None,
+    password: str | None = None,
     replace: bool = False,
 ) -> bool:
     """Push a JSON config payload to a device via gNMI SET.

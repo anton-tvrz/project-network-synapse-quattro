@@ -3,6 +3,8 @@ import logging
 
 from pygnmi.client import gNMIclient
 
+from network_synapse.gnmi_settings import gnmi_connection_kwargs, resolve_credentials
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -11,8 +13,8 @@ def deploy_config(
     hostname: str,
     ip_address: str,
     config_payload: str,
-    username: str = "admin",
-    password: str = "NokiaSrl1!",  # noqa: S107
+    username: str | None = None,
+    password: str | None = None,
     port: int = 57400,
     replace: bool = False,
 ) -> bool:
@@ -34,6 +36,8 @@ def deploy_config(
     """
     logger.info(f"Deploying configuration to {hostname} ({ip_address}:{port}, replace={replace})")
 
+    username, password = resolve_credentials(username, password)
+
     try:
         config_dict = json.loads(config_payload)
     except json.JSONDecodeError as e:
@@ -42,7 +46,7 @@ def deploy_config(
 
     host = (ip_address, port)
 
-    with gNMIclient(target=host, username=username, password=password, insecure=True) as gc:
+    with gNMIclient(target=host, username=username, password=password, **gnmi_connection_kwargs()) as gc:
         logger.debug(f"Successfully connected to gNMI on {hostname}")
         set_req = [("/", config_dict)]
         result = gc.set(replace=set_req) if replace else gc.set(update=set_req)
@@ -57,13 +61,16 @@ def deploy_config(
 
 def validate_gnmi_connection(
     ip_address: str,
-    username: str = "admin",
-    password: str = "NokiaSrl1!",  # noqa: S107
+    username: str | None = None,
+    password: str | None = None,
     port: int = 57400,
 ) -> bool:
     """Test connectivity to a device without pushing config."""
+    username, password = resolve_credentials(username, password)
     try:
-        with gNMIclient(target=(ip_address, port), username=username, password=password, insecure=True) as gc:
+        with gNMIclient(
+            target=(ip_address, port), username=username, password=password, **gnmi_connection_kwargs()
+        ) as gc:
             result = gc.capabilities()
             if result:
                 return True

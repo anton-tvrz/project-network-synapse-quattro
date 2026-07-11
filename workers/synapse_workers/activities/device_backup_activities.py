@@ -8,18 +8,15 @@ from synapse_workers.activities._gnmi_io import fetch_config_via_gnmi
 
 
 @activity.defn
-async def backup_running_config(
-    device_hostname: str,
-    ip_address: str,
-    username: str = "admin",
-    password: str = "NokiaSrl1!",  # noqa: S107
-) -> str:
+async def backup_running_config(device_hostname: str, ip_address: str) -> str:
     """Backup the current running configuration from a device via gNMI GET.
 
-    Returns config as JSON string.
+    Returns config as JSON string. Credentials are resolved from the worker's
+    environment inside the gNMI helper — never accepted as arguments, which
+    Temporal would persist in workflow history (Issue #166).
     """
     activity.logger.info(f"Backing up config for {device_hostname} at {ip_address}")
-    return await fetch_config_via_gnmi(device_hostname, ip_address, username, password)
+    return await fetch_config_via_gnmi(device_hostname, ip_address)
 
 
 @activity.defn
