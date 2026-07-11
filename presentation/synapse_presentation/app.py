@@ -10,17 +10,18 @@ from __future__ import annotations
 
 import logging
 import os
-import uuid
 from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from temporalio.client import Client  # noqa: TC002 — FastAPI resolves Annotated[Client, ...] at runtime
+from temporalio.exceptions import WorkflowAlreadyStartedError
 
 from synapse_presentation.auth import Identity, Role, parse_api_keys, require_role
-from synapse_presentation.temporal import TASK_QUEUE, get_temporal_client
+from synapse_presentation.temporal import get_temporal_client
 from synapse_presentation.ui import INDEX_HTML
+from synapse_workers.triggers import start_device_workflow
 from synapse_workers.workflows.operational_override_workflow import OperationalOverrideInput
 
 logger = logging.getLogger("synapse_presentation")
@@ -48,20 +49,31 @@ class OverrideRequest(BaseModel):
     duration_seconds: int = Field(gt=0)
 
 
-async def _start_workflow(client: Client, workflow: str, *, args: list, workflow_id: str, initiator: str) -> dict:
-    """Start a workflow with the initiator identity recorded in the memo."""
+async def _start_workflow(client: Client, workflow: str, *, args: list, device_hostname: str, initiator: str) -> dict:
+    """Start a workflow under the per-device mutex, initiator recorded in the memo.
+
+    All mutating workflows for a device share one Temporal workflow ID
+    (Issue #165), so a start while another operation runs on the device is a
+    409 conflict — never a race.
+    """
     try:
-        handle = await client.start_workflow(
+        handle = await start_device_workflow(
+            client,
             workflow,
+            device_hostname=device_hostname,
             args=args,
-            id=workflow_id,
-            task_queue=TASK_QUEUE,
             memo={"initiated_by": initiator},
         )
+    except WorkflowAlreadyStartedError as exc:
+        logger.info("Rejected %s for %s: another operation is running", workflow, device_hostname)
+        raise HTTPException(
+            status_code=409,
+            detail=f"Another operation is already running on {device_hostname}; retry when it completes",
+        ) from exc
     except Exception as exc:
-        logger.error("Failed to start %s (id=%s): %s", workflow, workflow_id, exc)
+        logger.error("Failed to start %s for %s: %s", workflow, device_hostname, exc)
         raise HTTPException(status_code=502, detail="Failed to start workflow via Temporal") from exc
-    logger.info("Started %s (id=%s) initiated by %s", workflow, workflow_id, initiator)
+    logger.info("Started %s (id=%s) initiated by %s", workflow, handle.id, initiator)
     return {"workflow_id": handle.id, "run_id": handle.result_run_id}
 
 
@@ -89,12 +101,11 @@ def create_app(api_keys: str | None = None) -> FastAPI:
         identity: Annotated[Identity, Depends(require_operator)],
         client: Annotated[Client, Depends(get_temporal_client)],
     ) -> dict:
-        workflow_id = f"deploy-{request.device_hostname}-{uuid.uuid4().hex[:8]}"
         return await _start_workflow(
             client,
             "NetworkChangeWorkflow",
             args=[request.device_hostname, request.ip_address],
-            workflow_id=workflow_id,
+            device_hostname=request.device_hostname,
             initiator=identity.user,
         )
 
@@ -114,12 +125,11 @@ def create_app(api_keys: str | None = None) -> FastAPI:
             operator=identity.user,  # server-set from the authenticated identity, never client-supplied
             duration_seconds=request.duration_seconds,
         )
-        workflow_id = f"override-{request.override_name}-{uuid.uuid4().hex[:8]}"
         return await _start_workflow(
             client,
             "OperationalOverrideWorkflow",
             args=[override_input],
-            workflow_id=workflow_id,
+            device_hostname=request.device_hostname,
             initiator=identity.user,
         )
 

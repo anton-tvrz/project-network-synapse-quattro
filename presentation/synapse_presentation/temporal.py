@@ -12,7 +12,9 @@ import os
 from fastapi import HTTPException
 from temporalio.client import Client
 
-TASK_QUEUE = "network-changes"
+from synapse_workers.triggers import TASK_QUEUE
+
+__all__ = ["TASK_QUEUE", "get_temporal_client"]
 
 logger = logging.getLogger("synapse_presentation.temporal")
 
