@@ -17,7 +17,7 @@ import json
 import grpc
 from pygnmi.client import gNMIclient, gNMIException
 
-from network_synapse.gnmi_settings import device_credentials, gnmi_connection_kwargs
+from network_synapse.gnmi_settings import gnmi_connection_kwargs, resolve_credentials
 from network_synapse.scripts.deploy_configs import deploy_config as push_via_gnmi
 
 # Errors we expect from a gRPC/gNMI round-trip against a real device.
@@ -79,10 +79,7 @@ def _fetch_config_via_gnmi_sync(
     password: str | None,
     port: int,
 ) -> str:
-    if username is None or password is None:
-        env_user, env_pass = device_credentials()
-        username = username if username is not None else env_user
-        password = password if password is not None else env_pass
+    username, password = resolve_credentials(username, password)
     with gNMIclient(
         target=(ip_address, port),
         username=username,

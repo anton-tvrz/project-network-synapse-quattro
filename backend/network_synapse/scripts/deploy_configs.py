@@ -3,7 +3,7 @@ import logging
 
 from pygnmi.client import gNMIclient
 
-from network_synapse.gnmi_settings import device_credentials, gnmi_connection_kwargs
+from network_synapse.gnmi_settings import gnmi_connection_kwargs, resolve_credentials
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -36,10 +36,7 @@ def deploy_config(
     """
     logger.info(f"Deploying configuration to {hostname} ({ip_address}:{port}, replace={replace})")
 
-    if username is None or password is None:
-        env_user, env_pass = device_credentials()
-        username = username if username is not None else env_user
-        password = password if password is not None else env_pass
+    username, password = resolve_credentials(username, password)
 
     try:
         config_dict = json.loads(config_payload)
@@ -69,10 +66,7 @@ def validate_gnmi_connection(
     port: int = 57400,
 ) -> bool:
     """Test connectivity to a device without pushing config."""
-    if username is None or password is None:
-        env_user, env_pass = device_credentials()
-        username = username if username is not None else env_user
-        password = password if password is not None else env_pass
+    username, password = resolve_credentials(username, password)
     try:
         with gNMIclient(
             target=(ip_address, port), username=username, password=password, **gnmi_connection_kwargs()

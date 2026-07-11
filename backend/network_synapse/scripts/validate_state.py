@@ -7,7 +7,7 @@ from typing import Any, TypedDict
 
 from pygnmi.client import gNMIclient
 
-from network_synapse.gnmi_settings import device_credentials, gnmi_connection_kwargs
+from network_synapse.gnmi_settings import gnmi_connection_kwargs, resolve_credentials
 
 logger = logging.getLogger(__name__)
 
@@ -55,10 +55,7 @@ def check_bgp_summary(
 ) -> bool:
     """Check if all configured BGP sessions are Established."""
     logger.info(f"Checking BGP state on {ip_address}")
-    if username is None or password is None:
-        env_user, env_pass = device_credentials()
-        username = username if username is not None else env_user
-        password = password if password is not None else env_pass
+    username, password = resolve_credentials(username, password)
     try:
         with gNMIclient(
             target=(ip_address, port), username=username, password=password, **gnmi_connection_kwargs()
@@ -210,10 +207,7 @@ def check_interface_state(
         dict with keys: passed (bool), device (str), details (list[dict]).
     """
     logger.info(f"Checking interface state on {ip_address}")
-    if username is None or password is None:
-        env_user, env_pass = device_credentials()
-        username = username if username is not None else env_user
-        password = password if password is not None else env_pass
+    username, password = resolve_credentials(username, password)
     try:
         with gNMIclient(
             target=(ip_address, port), username=username, password=password, **gnmi_connection_kwargs()

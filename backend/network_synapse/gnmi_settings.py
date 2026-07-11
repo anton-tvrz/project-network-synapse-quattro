@@ -21,12 +21,21 @@ Environment variables:
 from __future__ import annotations
 
 import os
+from typing import TypedDict
 
 _LAB_DEFAULT_USER = "admin"
 _LAB_DEFAULT_PASS = "NokiaSrl1!"  # noqa: S105 — containerlab SR Linux default, overridden via env
 
 
-def gnmi_connection_kwargs() -> dict:
+class GnmiTransportKwargs(TypedDict, total=False):
+    """Transport-security kwargs accepted by ``pygnmi.client.gNMIclient``."""
+
+    insecure: bool
+    skip_verify: bool
+    path_root: str
+
+
+def gnmi_connection_kwargs() -> GnmiTransportKwargs:
     """Transport-security kwargs for ``pygnmi.client.gNMIclient``.
 
     Fails loud on a malformed mode: a typo must abort the connection attempt,
@@ -50,4 +59,17 @@ def device_credentials() -> tuple[str, str]:
     return (
         os.getenv("GNMI_USERNAME", _LAB_DEFAULT_USER),
         os.getenv("GNMI_PASSWORD", _LAB_DEFAULT_PASS),
+    )
+
+
+def resolve_credentials(username: str | None, password: str | None) -> tuple[str, str]:
+    """Fill in missing credentials from the environment.
+
+    Call sites accept optional explicit credentials (for tests and standalone
+    scripts) and fall back to :func:`device_credentials` per-field.
+    """
+    env_user, env_pass = device_credentials()
+    return (
+        username if username is not None else env_user,
+        password if password is not None else env_pass,
     )

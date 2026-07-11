@@ -34,7 +34,7 @@ def _all_activity_functions():
 
 
 @pytest.mark.unit
-def test_activities_are_discovered() -> None:
+def test_activity_walker_when_scanning_modules_finds_registered_activities() -> None:
     """The walker must actually find the registered activities, or the guard is vacuous."""
     names = {fn.__name__ for fn in _all_activity_functions()}
 
@@ -42,7 +42,7 @@ def test_activities_are_discovered() -> None:
 
 
 @pytest.mark.unit
-def test_no_activity_accepts_credential_arguments() -> None:
+def test_activity_signatures_when_inspected_accept_no_credential_arguments() -> None:
     offenders = []
     for fn in _all_activity_functions():
         params = set(inspect.signature(fn).parameters)
