@@ -22,6 +22,7 @@ import pytest
 from fastapi.testclient import TestClient
 from synapse_presentation.app import create_app
 from synapse_presentation.temporal import get_temporal_client
+from temporalio.exceptions import WorkflowAlreadyStartedError
 
 OPERATOR_KEY = "test-operator-key"
 VIEWER_KEY = "test-viewer-key"
@@ -141,7 +142,24 @@ class TestDeployments:
         assert call.kwargs["args"] == ["leaf01", "172.20.20.11"]
         assert call.kwargs["task_queue"] == "network-changes"
         assert call.kwargs["memo"] == {"initiated_by": "alice"}
-        assert call.kwargs["id"].startswith("deploy-leaf01-")
+        # Device-scoped mutex ID (Issue #165): all mutating workflows for a
+        # device share one Temporal workflow ID, so concurrent starts collide.
+        assert call.kwargs["id"] == "device-ops-leaf01"
+
+    def test_busy_device_returns_409(self, app_client: TestClient, mock_temporal_client: AsyncMock) -> None:
+        """A workflow already running for the device is a conflict, not a race (Issue #165)."""
+        mock_temporal_client.start_workflow.side_effect = WorkflowAlreadyStartedError(
+            "device-ops-leaf01", "NetworkChangeWorkflow"
+        )
+
+        response = app_client.post(
+            "/api/deployments",
+            json=_deploy_payload(),
+            headers={"X-API-Key": OPERATOR_KEY},
+        )
+
+        assert response.status_code == 409
+        assert "leaf01" in response.json()["detail"]
 
     def test_temporal_connect_failure_is_502(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A Temporal that is unreachable at connect time is a 502, not a 500."""
@@ -192,6 +210,9 @@ class TestOverrides:
         assert override_input.override_name == "maint-leaf01"
         assert override_input.duration_seconds == 600
         assert call.kwargs["memo"] == {"initiated_by": "alice"}
+        # Same device mutex as deployments: an override cannot start while a
+        # change is running on the device, and vice versa (Issue #165).
+        assert call.kwargs["id"] == "device-ops-leaf01"
 
     def test_client_supplied_operator_is_ignored(self, app_client: TestClient, mock_temporal_client: AsyncMock) -> None:
         payload = _override_payload() | {"operator": "mallory"}

@@ -51,20 +51,26 @@ Press `Ctrl+C` to stop the worker.
 
 ## Step 4: Trigger a Test Workflow
 
+Always start device-mutating workflows through `synapse_workers.triggers.start_device_workflow` —
+it derives the workflow ID from the device (`device-ops-<hostname>`), which acts as a per-device
+mutex: a second change, drift remediation, or override for the same device is rejected while one
+is running instead of racing it (see issue #165).
+
 ```bash
 uv run python -c "
 import asyncio
 from temporalio.client import Client
+from synapse_workers.triggers import start_device_workflow
 
 async def main():
     client = await Client.connect('localhost:7233')
-    result = await client.execute_workflow(
+    handle = await start_device_workflow(
+        client,
         'NetworkChangeWorkflow',
+        device_hostname='spine01',
         args=['spine01', '172.20.20.10'],
-        id='demo-network-change-001',
-        task_queue='network-changes',
     )
-    print(f'Workflow result: {result}')
+    print(f'Workflow result: {await handle.result()}')
 
 asyncio.run(main())
 "
@@ -75,7 +81,7 @@ asyncio.run(main())
 ## Step 5: Watch the Workflow Execute
 
 1. Open Temporal UI: http://localhost:8080
-2. Click on workflow `demo-network-change-001`
+2. Click on workflow `device-ops-spine01`
 3. Watch the 7 steps execute in real time:
    - Step 1: Backup running config (gNMI GET)
    - Step 2: Fetch intended config (Infrahub GraphQL)

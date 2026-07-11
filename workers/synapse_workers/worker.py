@@ -20,6 +20,7 @@ from synapse_workers.activities.override_activities import (
 )
 from synapse_workers.activities.validation_activities import validate_bgp, validate_interfaces
 from synapse_workers.metrics import start_metrics_server
+from synapse_workers.triggers import TASK_QUEUE
 from synapse_workers.workflows.drift_remediation_workflow import DriftRemediationWorkflow
 from synapse_workers.workflows.emergency_change_workflow import EmergencyChangeWorkflow
 from synapse_workers.workflows.network_change_workflow import NetworkChangeWorkflow
@@ -37,7 +38,7 @@ async def main() -> None:
 
     worker = Worker(
         client,
-        task_queue="network-changes",
+        task_queue=TASK_QUEUE,
         workflows=[
             NetworkChangeWorkflow,
             DriftRemediationWorkflow,
