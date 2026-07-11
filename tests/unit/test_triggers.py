@@ -32,9 +32,10 @@ class TestDeviceWorkflowId:
         """One mutex per device: change/drift/override must collide, not race."""
         assert device_workflow_id("leaf01") == device_workflow_id("leaf01")
 
-    def test_id_when_hostname_empty_fails_loud(self) -> None:
+    @pytest.mark.parametrize("hostname", ["", "   ", "\t"])
+    def test_id_when_hostname_blank_fails_loud(self, hostname: str) -> None:
         with pytest.raises(ValueError, match="hostname"):
-            device_workflow_id("")
+            device_workflow_id(hostname)
 
 
 @pytest.mark.unit

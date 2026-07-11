@@ -31,7 +31,7 @@ TASK_QUEUE = "network-changes"
 
 def device_workflow_id(device_hostname: str) -> str:
     """The device-scoped Temporal workflow ID shared by all mutating workflows."""
-    if not device_hostname:
+    if not device_hostname.strip():
         raise ValueError("device hostname must be non-empty to build a workflow ID")
     return f"device-ops-{device_hostname}"
 
