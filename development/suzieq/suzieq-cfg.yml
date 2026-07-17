@@ -1,0 +1,18 @@
+# Suzieq configuration shared by the poller and the REST server (Issue #169).
+# The parquet data directory lives on the `suzieq_parquet` volume so the
+# REST server reads what the poller writes.
+data-directory: /home/suzieq/parquet
+
+poller:
+  logging-level: WARNING
+  period: 60
+
+rest:
+  address: 0.0.0.0
+  port: 8000
+  # Static dev-only key; REST API is bound to localhost:8530 on the host.
+  API_KEY: 496157e6e869ef7f3d6ecb24a6f6d847b224ee4f  # pragma: allowlist secret — local dev only
+  logging-level: WARNING
+
+analyzer:
+  timezone: UTC

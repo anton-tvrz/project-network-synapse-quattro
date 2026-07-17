@@ -254,7 +254,8 @@ curl http://localhost:4200/api/health
 ```
 
 > **Note:** Infrahub takes 60-90s to fully initialize (Neo4j + task-manager must be ready first).
-> SuzieQ is commented out in docker-compose (broken on Apple Silicon).
+> Suzieq runs as part of the dependency stack (amd64 image under Rosetta) —
+> see [collector.md](collector.md) for the full telemetry/collector architecture.
 
 ---
 

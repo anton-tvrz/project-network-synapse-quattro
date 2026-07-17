@@ -46,7 +46,7 @@
       "type": "stat",
       "gridPos": {"h": 8, "w": 6, "x": 12, "y": 8},
       "targets": [
-        {"expr": "count(up{job=\"network_devices\"})", "legendFormat": "Devices", "refId": "A"}
+        {"expr": "count(count by (source) (gnmic_interface_state_interface_oper_state))", "legendFormat": "Devices", "refId": "A"}
       ]
     },
     {

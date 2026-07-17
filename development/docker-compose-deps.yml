@@ -8,6 +8,7 @@
 #   Infrahub stack:  ~5GB (Neo4j 2G, server 1G, task-manager 512M, task-worker 1G, Postgres 256M)
 #   Supporting:      ~2GB (Redis 256M, RabbitMQ 512M, Temporal 1G, Temporal DB 256M)
 #   Observability:   ~1GB (Prometheus 512M, Grafana 256M)
+#   Collector:       ~1.3GB (Suzieq poller 512M + REST 256M, gnmic 128M, Loki 256M, Alloy 128M)
 
 name: synapse-quattro
 
@@ -208,20 +209,99 @@ services:
 
   # ---------------------------------------------------------------------------
   # Telemetry & Observability stack
+  #
+  # Collector block (Issue #169): suzieq-poller/-rest, gnmic, loki, alloy.
+  # The pollers join the external `clab` network to reach the SR Linux
+  # management IPs — `invoke dev.deps` pre-creates it when containerlab
+  # hasn't run yet (containerlab reuses an existing network with its name).
   # ---------------------------------------------------------------------------
-  # suzieq:
-  #   # NOTE: SuzieQ image is linux/amd64 only — broken on Apple Silicon.
-  #   # Re-enable when an ARM-compatible image is available.
-  #   image: netenglabs/suzieq:latest
-  #   platform: linux/amd64
-  #   container_name: suzieq
-  #   ports:
-  #     - "8530:8530"
-  #     - "8531:8531"
-  #   volumes:
-  #     - ./suzieq/suzieq-inventory.yml:/suzieq/suzieq-inventory.yml:ro
-  #     - suzieq_parquet:/suzieq/parquet
-  #   command: "sq-poller -I /suzieq/suzieq-inventory.yml"
+  suzieq-poller:
+    # The upstream image is linux/amd64 only; OrbStack runs it via Rosetta.
+    image: netenglabs/suzieq:latest
+    platform: linux/amd64
+    container_name: suzieq-poller
+    # The image ENTRYPOINT is /bin/bash, which would misinterpret a plain
+    # `command` as a shell script — run the entry script directly.
+    entrypoint: "sq-poller -I /suzieq/suzieq-inventory.yml -c /suzieq/suzieq-cfg.yml"
+    # Retry until the containerlab nodes are reachable
+    restart: unless-stopped
+    volumes:
+      - ./suzieq/suzieq-inventory.yml:/suzieq/suzieq-inventory.yml:ro
+      - ./suzieq/suzieq-cfg.yml:/suzieq/suzieq-cfg.yml:ro
+      - suzieq_parquet:/home/suzieq/parquet
+    networks:
+      - default
+      - clab
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+
+  suzieq-rest:
+    image: netenglabs/suzieq:latest
+    platform: linux/amd64
+    container_name: suzieq-rest
+    entrypoint: "sq-rest-server -c /suzieq/suzieq-cfg.yml --no-https"
+    restart: unless-stopped
+    ports:
+      - "${SUZIEQ_REST_PORT:-8530}:8000"
+    volumes:
+      - ./suzieq/suzieq-cfg.yml:/suzieq/suzieq-cfg.yml:ro
+      - suzieq_parquet:/home/suzieq/parquet
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+
+  gnmic:
+    # Multi-arch (native arm64) — streaming gNMI subscriptions to Prometheus
+    image: ghcr.io/openconfig/gnmic:latest
+    container_name: gnmic
+    command: "subscribe --config /app/gnmic.yml"
+    restart: unless-stopped
+    volumes:
+      - ./gnmic/gnmic.yml:/app/gnmic.yml:ro
+    networks:
+      - default
+      - clab
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.5"
+
+  loki:
+    image: grafana/loki:latest
+    container_name: loki
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    volumes:
+      - loki_data:/loki
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+
+  alloy:
+    image: grafana/alloy:latest
+    container_name: alloy
+    command: "run --storage.path=/var/lib/alloy/data /etc/alloy/config.alloy"
+    depends_on:
+      - loki
+    ports:
+      # SR Linux nodes send syslog to the clab gateway (the OrbStack host),
+      # which forwards to this published listener.
+      - "${SYSLOG_PORT:-5514}:5514/udp"
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.5"
 
   prometheus:
     image: prom/prometheus:latest
@@ -283,11 +363,19 @@ services:
           memory: 256M
           cpus: "0.5"
 
+networks:
+  # Containerlab management bridge (172.20.20.0/24). Owned by containerlab;
+  # `invoke dev.deps` pre-creates it so this stack can start lab-first or
+  # lab-later in either order.
+  clab:
+    external: true
+
 volumes:
   neo4j_data:
   infrahub_task_manager_db_data:
   temporal_db_data:
-  # suzieq_parquet:
+  suzieq_parquet:
+  loki_data:
   prometheus_data:
   grafana_data:
   influxdb_data:

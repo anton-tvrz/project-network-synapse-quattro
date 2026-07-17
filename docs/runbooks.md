@@ -35,16 +35,16 @@
 3. **Add to Suzieq inventory:**
 
    ```yaml
-   # development/suzieq/suzieq-inventory.yml
-   - hostname: leaf03
-     address: 172.20.20.13
+   # development/suzieq/suzieq-inventory.yml (under sources[0].hosts)
+   - url: ssh://clab-spine-leaf-lab-leaf03
    ```
 
-4. **Add to Prometheus:**
+4. **Add to gnmic streaming telemetry:**
 
    ```yaml
-   # development/prometheus/prometheus.yml
-   - targets: ["172.20.20.13:57400"]
+   # development/gnmic/gnmic.yml (under targets)
+   leaf03:
+     address: clab-spine-leaf-lab-leaf03:57400
    ```
 
 5. **Deploy topology:**

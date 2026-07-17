@@ -1,11 +1,33 @@
+# Suzieq inventory — containerlab spine-leaf fabric (Issue #169)
+#
+# Modern inventory format (sources/devices/auths/namespaces), see
+# https://suzieq.readthedocs.io/en/latest/inventory/
+#
+# Containerlab DNS names are used instead of management IPs: the mgmt
+# addresses are DHCP-assigned and Docker DNS resolves node names on the
+# shared `clab` network the poller is attached to.
+
 sources:
   - name: containerlab-fabric
     hosts:
-      - default:
-          username: admin
-          password: NokiaSrl1!
-          devtype: linux
-          port: 22
-      - url: ssh://172.20.20.2    # spine01
-      - url: ssh://172.20.20.3    # leaf01
-      - url: ssh://172.20.20.4    # leaf02
+      - url: ssh://clab-spine-leaf-lab-spine01
+      - url: ssh://clab-spine-leaf-lab-leaf01
+      - url: ssh://clab-spine-leaf-lab-leaf02
+
+devices:
+  # SR Linux is polled as a generic Linux host over SSH (Suzieq has no
+  # native SR Linux devtype); interface/route/LLDP tables still populate.
+  - name: srlinux-fabric
+    devtype: linux
+    ignore-known-hosts: true
+
+auths:
+  - name: lab-admin
+    username: admin
+    password: plain:NokiaSrl1!  # pragma: allowlist secret — containerlab SR Linux default, lab only
+
+namespaces:
+  - name: spine-leaf-lab
+    source: containerlab-fabric
+    device: srlinux-fabric
+    auth: lab-admin
