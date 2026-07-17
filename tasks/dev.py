@@ -62,6 +62,15 @@ def stop(ctx: Context) -> None:
 @task
 def deps(ctx: Context) -> None:
     """Start infrastructure dependencies only (Infrahub, Temporal, Neo4j, Redis)."""
+    # The collector services (suzieq, gnmic) join the containerlab management
+    # bridge, declared external in the compose file. Pre-create it when the
+    # lab hasn't been deployed yet — containerlab reuses an existing network
+    # with a matching name, so lab-first and deps-first both work.
+    execute_command(
+        ctx,
+        "docker network inspect clab >/dev/null 2>&1 || "
+        "docker network create --driver bridge --subnet 172.20.20.0/24 --gateway 172.20.20.1 clab",
+    )
     execute_command(ctx, f"docker compose -f {PROJECT_ROOT}/development/docker-compose-deps.yml up -d")
 
 
@@ -90,6 +99,12 @@ def lab_destroy(ctx: Context) -> None:
     quoted_root = shlex.quote(str(PROJECT_ROOT))
     topo = f"{quoted_root}/containerlab/topology.clab.yml"
     execute_command(ctx, _clab_docker_cmd(quoted_root, f"containerlab destroy --topo {topo}"))
+
+
+@task
+def lab_syslog(ctx: Context) -> None:
+    """Point fabric syslog at the Loki/Alloy collector pipeline (Issue #169)."""
+    execute_command(ctx, "uv run python -m network_synapse.scripts.configure_syslog")
 
 
 @task

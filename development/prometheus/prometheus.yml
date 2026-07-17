@@ -27,10 +27,9 @@ scrape_configs:
     static_configs:
       - targets: ["host.docker.internal:9464"]
 
-  # Network device probes (blackbox exporter style — placeholder)
-  - job_name: "network_devices"
+  # Streaming gNMI telemetry from the containerlab fabric (Issue #169).
+  # gnmic subscribes to interface + BGP state and re-exports it here with
+  # normalized device-name labels (source="spine01"...).
+  - job_name: "gnmic"
     static_configs:
-      - targets:
-          - "172.20.20.10:57400"  # spine01
-          - "172.20.20.11:57400"  # leaf01
-          - "172.20.20.12:57400"  # leaf02
+      - targets: ["gnmic:9273"]

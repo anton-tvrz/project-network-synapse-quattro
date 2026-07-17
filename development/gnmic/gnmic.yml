@@ -1,0 +1,68 @@
+# gnmic — streaming gNMI subscriptions from the containerlab fabric (Issue #169)
+#
+# Continuous interface + BGP state as an alternative to on-demand GETs
+# (validate_state.py). Metrics are exported on :9273 and scraped by the
+# Prometheus service in docker-compose-deps.yml.
+#
+# Label normalization: targets are keyed by the clean device name, so the
+# Prometheus `source` label carries `spine01` / `leaf01` / `leaf02` —
+# matching the `device` label used across the observability stack — instead
+# of an address:port pair.
+
+username: admin
+password: NokiaSrl1!  # pragma: allowlist secret — containerlab SR Linux default, lab only
+# containerlab SR Linux gNMI is TLS-only with self-signed certs
+skip-verify: true
+encoding: json_ietf
+log: true
+
+targets:
+  spine01:
+    address: clab-spine-leaf-lab-spine01:57400
+  leaf01:
+    address: clab-spine-leaf-lab-leaf01:57400
+  leaf02:
+    address: clab-spine-leaf-lab-leaf02:57400
+
+subscriptions:
+  interface-state:
+    paths:
+      - /interface[name=*]/oper-state
+      - /interface[name=*]/statistics/in-octets
+      - /interface[name=*]/statistics/out-octets
+      - /interface[name=*]/statistics/in-error-packets
+      - /interface[name=*]/statistics/out-error-packets
+    stream-mode: sample
+    sample-interval: 15s
+
+  bgp-neighbor-state:
+    paths:
+      - /network-instance[name=*]/protocols/bgp/neighbor[peer-address=*]/session-state
+    stream-mode: on-change
+
+outputs:
+  prometheus:
+    type: prometheus
+    listen: :9273
+    path: /metrics
+    metric-prefix: gnmic
+    append-subscription-name: true
+    export-timestamps: false
+    strings-as-labels: true
+    event-processors:
+      - strip-yang-prefixes
+
+processors:
+  # With json_ietf, SR Linux prefixes every path element with its YANG
+  # module name (srl_nokia-interfaces:interface/oper-state), which would
+  # leak into the Prometheus metric names. Strip them so metrics stay
+  # vendor-neutral: gnmic_interface_state_interface_oper_state.
+  strip-yang-prefixes:
+    event-strings:
+      value-names:
+        - ".*"
+      transforms:
+        - replace:
+            apply-on: "name"
+            old: "srl_nokia-[a-z0-9-]+:"
+            new: ""

@@ -27,4 +27,7 @@ regexes = [
     # so CI scripts and local dev can authenticate against a freshly-booted Infrahub.
     '''06438eb2-8019-4776-878c-0941b1f1d1ec''',
     '''44af444d-3b26-410d-9546-b758657e026c''',
+    # Suzieq REST API dev key (the well-known key from Suzieq's own docs).
+    # Localhost-bound dev stack only — see development/suzieq/suzieq-cfg.yml.
+    '''496157e6e869ef7f3d6ecb24a6f6d847b224ee4f''',  # pragma: allowlist secret
 ]

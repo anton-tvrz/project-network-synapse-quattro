@@ -20,16 +20,21 @@ groups:
       # Node reachability alerts
       # -----------------------------------------------------------------------
       - alert: NetworkDeviceUnreachable
-        expr: probe_success{job="network_devices"} == 0
-        for: 1m
+        # gnmic drops a device's series from its Prometheus export when the
+        # gNMI subscription dies, so fewer than 3 streaming devices (or no
+        # interface metrics at all) means a fabric node is unreachable.
+        expr: >-
+          count(count by (source) (gnmic_interface_state_interface_oper_state)) < 3
+          or absent(gnmic_interface_state_interface_oper_state)
+        for: 2m
         labels:
           severity: critical
         annotations:
-          summary: "Network device {{ $labels.instance }} is UNREACHABLE"
+          summary: "One or more fabric devices are missing from streaming telemetry"
           description: >-
-            The network device {{ $labels.instance }} has been unreachable
-            for more than 1 minute. Check physical connectivity or SSH/gNMI
-            access.
+            Fewer than the expected 3 fabric devices (spine01, leaf01,
+            leaf02) are present in the gnmic streaming-telemetry export for
+            more than 2 minutes. Check gNMI reachability of the lab nodes.
 
       # -----------------------------------------------------------------------
       # Interface flap detection
