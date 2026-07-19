@@ -25,7 +25,7 @@ Three ingestion paths, all started by `uv run invoke dev.deps`:
 |------|-----------|-----------|------|-----------|
 | Streaming telemetry | gnmic | gNMI subscribe (TLS) | Prometheus | PromQL / Grafana |
 | Snapshot polling | Suzieq poller | SSH | Parquet | Suzieq REST API |
-| Logs | Grafana Alloy | Syslog UDP (RFC3164) | Loki | LogQL / Grafana |
+| Logs | Grafana Alloy | Syslog UDP (RFC5424) | Loki | LogQL / Grafana |
 
 The collector containers join the external `clab` docker network to reach
 the SR Linux management interfaces. `invoke dev.deps` pre-creates that
@@ -90,7 +90,8 @@ dev-only value; the API is bound to localhost.
 ## Syslog ingestion (Alloy → Loki)
 
 SR Linux forwards syslog to the collector; Grafana Alloy listens on host
-port `5514/udp` (RFC3164), normalizes the header fields onto the stack's
+port `5514/udp` (RFC5424 — SR Linux emits RSYSLOG_SyslogProtocol23Format,
+verified on-device), normalizes the header fields onto the stack's
 label names (`device`, `severity`, `facility`, `app`), and pushes to Loki.
 Loki is provisioned as a Grafana datasource.
 

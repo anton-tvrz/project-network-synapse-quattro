@@ -64,7 +64,7 @@ def test_config_deploy_and_validate():
     )
     from network_synapse.scripts.validate_state import check_bgp_summary
 
-    device_ip = os.getenv("TEST_DEVICE_IP", "172.20.20.2")
+    device_ip = os.getenv("TEST_DEVICE_IP", "172.20.20.11")
     hostname = os.getenv("TEST_DEVICE_HOSTNAME", "spine01")
 
     # 1. Verify connectivity
@@ -127,7 +127,7 @@ def test_rollback_restores_config():
         validate_gnmi_connection,
     )
 
-    device_ip = os.getenv("TEST_DEVICE_IP", "172.20.20.2")
+    device_ip = os.getenv("TEST_DEVICE_IP", "172.20.20.11")
     hostname = os.getenv("TEST_DEVICE_HOSTNAME", "spine01")
 
     if not validate_gnmi_connection(device_ip):

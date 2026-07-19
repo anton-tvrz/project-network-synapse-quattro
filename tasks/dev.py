@@ -19,11 +19,16 @@ from .shared import PROJECT_ROOT, execute_command
 _CLAB_IMAGE = "ghcr.io/srl-labs/clab:latest"
 
 
-def _clab_docker_cmd(quoted_root: str, clab_args: str, *, docker_flags: str = "--rm -it --privileged") -> str:
+def _clab_docker_cmd(
+    quoted_root: str, clab_args: str, *, docker_flags: str = "--rm -it --privileged --pid host"
+) -> str:
     """Build a Docker command for running Containerlab inside a container.
 
     Centralises the common volume mounts required for Docker-outside-of-Docker
-    Containerlab execution.
+    Containerlab execution. ``--pid host`` is required on OrbStack: without it
+    containerlab cannot resolve the started nodes' network-namespace paths
+    ("namespace path not available") and every deploy fails after creating
+    the containers.
     """
     return (
         f"docker run {docker_flags} --network host "
@@ -118,7 +123,7 @@ def lab_graph(ctx: Context) -> None:
         _clab_docker_cmd(
             quoted_root,
             f"containerlab graph --topo {topo}",
-            docker_flags="-d --rm --name clab-graph --privileged",
+            docker_flags="-d --rm --name clab-graph --privileged --pid host",
         ),
     )
     print("Serving topology graph on http://localhost:50080")

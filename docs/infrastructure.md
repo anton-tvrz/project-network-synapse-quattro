@@ -23,12 +23,12 @@ Spine-leaf topology with 1 spine and 2 leaf switches, all Nokia SR Linux.
 
 | Device | Role | Type | Management IP | Container Name |
 |--------|------|------|---------------|----------------|
-| spine01 | spine | 7220 IXR-D3 | 172.20.20.3 | clab-spine-leaf-lab-spine01 |
-| leaf01 | leaf | 7220 IXR-D2 | 172.20.20.2 | clab-spine-leaf-lab-leaf01 |
-| leaf02 | leaf | 7220 IXR-D2 | 172.20.20.4 | clab-spine-leaf-lab-leaf02 |
-| firewall| firewall| VyOS 1.4 | DHCP | clab-spine-leaf-lab-firewall |
-| pc1     | client | Linux (Alpine) | DHCP | clab-spine-leaf-lab-pc1 |
-| pc2     | client | Linux (Alpine) | DHCP | clab-spine-leaf-lab-pc2 |
+| spine01 | spine | 7220 IXR-D3 | 172.20.20.10 | clab-spine-leaf-lab-spine01 |
+| leaf01 | leaf | 7220 IXR-D2 | 172.20.20.11 | clab-spine-leaf-lab-leaf01 |
+| leaf02 | leaf | 7220 IXR-D2 | 172.20.20.12 | clab-spine-leaf-lab-leaf02 |
+| firewall| firewall| VyOS 1.4 | 172.20.20.13 | clab-spine-leaf-lab-firewall |
+| pc1     | client | Linux (Alpine) | 172.20.20.14 | clab-spine-leaf-lab-pc1 |
+| pc2     | client | Linux (Alpine) | 172.20.20.15 | clab-spine-leaf-lab-pc2 |
 
 ### Credentials
 
@@ -43,15 +43,15 @@ No tunnels or proxy setup required.
 
 ```bash
 # SSH into a device (directly from macOS terminal)
-ssh admin@172.20.20.3          # spine01
-ssh admin@172.20.20.2          # leaf01
-ssh admin@172.20.20.4          # leaf02
+ssh admin@172.20.20.10          # spine01
+ssh admin@172.20.20.11          # leaf01
+ssh admin@172.20.20.12          # leaf02
 ```
 
 ### JSON-RPC (HTTPS, port 443)
 
 ```bash
-curl -sk https://172.20.20.3/jsonrpc -u admin:NokiaSrl1! \
+curl -sk https://172.20.20.10/jsonrpc -u admin:NokiaSrl1! \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -69,7 +69,7 @@ curl -sk https://172.20.20.3/jsonrpc -u admin:NokiaSrl1! \
 
 ```bash
 # Using pygnmi or similar
-# Target: 172.20.20.3:57400 (spine01)
+# Target: 172.20.20.10:57400 (spine01)
 # TLS: insecure (self-signed cert)
 ```
 
@@ -405,7 +405,7 @@ sudo containerlab inspect -t containerlab/topology.clab.yml
 docker network ls | grep clab
 
 # Ping from macOS (OrbStack makes this work directly)
-ping -c 2 172.20.20.3
+ping -c 2 172.20.20.10
 ```
 
 ### Port conflict

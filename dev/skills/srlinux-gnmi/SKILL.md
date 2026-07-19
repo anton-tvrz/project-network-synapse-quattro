@@ -93,7 +93,7 @@ The lab runs 3 Nokia SR Linux nodes via Containerlab:
 | leaf01 | Leaf | IXR-D2 | 65001 | 57401 |
 | leaf02 | Leaf | IXR-D2 | 65002 | 57402 |
 
-Management network: `172.20.20.0/24` (DHCP by Containerlab).
+Management network: `172.20.20.0/24`, static pins: spine01=.10, leaf01=.11, leaf02=.12 (Issue #178 — the network is shared with other labs).
 
 ## Common Mistakes
 

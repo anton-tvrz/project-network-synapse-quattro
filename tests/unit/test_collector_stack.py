@@ -249,12 +249,17 @@ class TestSyslogPipeline:
     def test_alloy_mounts_config_readonly(self, services: dict):
         assert any("config.alloy" in v and v.endswith(":ro") for v in services["alloy"]["volumes"])
 
-    def test_alloy_config_listens_for_rfc3164_udp_syslog(self):
+    def test_alloy_config_listens_for_rfc5424_udp_syslog(self):
+        """SR Linux emits RSYSLOG_SyslogProtocol23Format (RFC5424-style) —
+        verified from the rsyslog config it generates on the device. An
+        rfc3164 listener drops every message with a parse error."""
         config = ALLOY_CONFIG_PATH.read_text()
         assert "loki.source.syslog" in config
         assert '"udp"' in config
-        assert "rfc3164" in config
-        assert "5514" in config
+        assert '"5514"' in config or ":5514" in config
+        settings = [line for line in config.splitlines() if "syslog_format" in line]
+        assert settings
+        assert all('"rfc5424"' in line for line in settings)
 
     def test_alloy_config_normalizes_device_label(self):
         """Syslog hostname is relabeled to the `device` label used by the

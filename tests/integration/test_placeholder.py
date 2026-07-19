@@ -73,7 +73,7 @@ def test_containerlab_gnmi_connectivity():
     """Verify gNMI connectivity to a Containerlab SR Linux node."""
     from network_synapse.scripts.deploy_configs import validate_gnmi_connection
 
-    device_ip = os.getenv("TEST_DEVICE_IP", "172.20.20.2")
+    device_ip = os.getenv("TEST_DEVICE_IP", "172.20.20.11")
     assert validate_gnmi_connection(device_ip)
 
 
@@ -82,7 +82,7 @@ def test_containerlab_bgp_state():
     """Verify BGP sessions are established on a Containerlab device."""
     from network_synapse.scripts.validate_state import check_bgp_summary
 
-    device_ip = os.getenv("TEST_DEVICE_IP", "172.20.20.2")
+    device_ip = os.getenv("TEST_DEVICE_IP", "172.20.20.11")
     assert check_bgp_summary(device_ip)
 
 

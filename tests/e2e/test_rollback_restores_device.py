@@ -10,7 +10,7 @@ Runs against the containerlab-default gNMI server, which is TLS-only — the
 test defaults ``GNMI_TLS_MODE`` to ``skip-verify`` on the standard port
 (Issue #166 made the transport configurable). Override the target via::
 
-    TEST_GNMI_IP=172.20.20.2 TEST_GNMI_PORT=57400 pytest tests/e2e -m e2e -k rollback
+    TEST_GNMI_IP=172.20.20.11 TEST_GNMI_PORT=57400 pytest tests/e2e -m e2e -k rollback
 
 The test restores the device from its own baseline in a ``finally`` block, so
 a failing assertion does not leave the lab node dirty.
@@ -26,7 +26,7 @@ import socket
 import pytest
 
 DEVICE_HOSTNAME = os.getenv("TEST_DEVICE_HOSTNAME", "leaf01")
-GNMI_IP = os.getenv("TEST_GNMI_IP", "172.20.20.2")
+GNMI_IP = os.getenv("TEST_GNMI_IP", "172.20.20.11")
 GNMI_PORT = int(os.getenv("TEST_GNMI_PORT", "57400"))
 GNMI_USER = os.getenv("TEST_GNMI_USER", "admin")
 GNMI_PASS = os.getenv("TEST_GNMI_PASS", "NokiaSrl1!")
