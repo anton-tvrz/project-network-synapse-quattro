@@ -56,7 +56,7 @@ devices:
     role: spine
     status: active
     device_type: "7220 IXR-D3"
-    management_ip: "172.20.20.3/24"
+    management_ip: "172.20.20.10/24"
     lab_node_name: "clab-spine-leaf-lab-spine01"
     asn: 65000
     description: "Spine switch - Nokia 7220 IXR-D3"
@@ -65,7 +65,7 @@ devices:
     role: leaf
     status: active
     device_type: "7220 IXR-D2"
-    management_ip: "172.20.20.2/24"
+    management_ip: "172.20.20.11/24"
     lab_node_name: "clab-spine-leaf-lab-leaf01"
     asn: 65001
     description: "Leaf switch 01 - Nokia 7220 IXR-D2"
@@ -74,7 +74,7 @@ devices:
     role: leaf
     status: active
     device_type: "7220 IXR-D2"
-    management_ip: "172.20.20.4/24"
+    management_ip: "172.20.20.12/24"
     lab_node_name: "clab-spine-leaf-lab-leaf02"
     asn: 65002
     description: "Leaf switch 02 - Nokia 7220 IXR-D2"

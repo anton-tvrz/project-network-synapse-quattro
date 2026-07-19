@@ -81,7 +81,8 @@ docker exec -it clab-spine-leaf-lab-firewall /bin/bash
 docker exec -it clab-spine-leaf-lab-pc1 /bin/sh
 docker exec -it clab-spine-leaf-lab-pc2 /bin/sh
 
-# DNS names (from macOS)
+# DNS names (resolve from containers on the clab docker network ONLY —
+# NOT from macOS; host-side scripts must use the pinned mgmt IPs)
 clab-spine-leaf-lab-spine01
 clab-spine-leaf-lab-leaf01
 clab-spine-leaf-lab-leaf02
@@ -93,7 +94,7 @@ clab-spine-leaf-lab-pc2
 ## Management Network
 
 - Network: `172.20.20.0/24`
-- DHCP assigned by Containerlab
+- Static mgmt IPs: spine01=.10, leaf01=.11, leaf02=.12, firewall=.13, pc1=.14, pc2=.15 (the `clab` network is shared with other labs; Issue #178)
 - Access from macOS host via OrbStack network bridge
 - gNMI ports: spine01=57400, leaf01=57401, leaf02=57402
 

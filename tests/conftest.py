@@ -13,13 +13,14 @@ from network_synapse.infrahub.models import (
     InterfaceData,
 )
 
-# ─── Containerlab mgmt IPs (DHCP-assigned, may change on redeploy) ───
-# Current assignment (OrbStack / Containerlab):
-#   leaf01:  172.20.20.2
-#   spine01: 172.20.20.3
-#   leaf02:  172.20.20.4
+# ─── Containerlab mgmt IPs (statically pinned, Issue #178) ───
+# topology.clab.yml pins:
+#   spine01: 172.20.20.10
+#   leaf01:  172.20.20.11
+#   leaf02:  172.20.20.12
 # For integration tests, use the clab_topology fixture below.
-# For unit tests, fixtures use stable placeholder IPs (mocked, not real).
+# For unit tests, fixtures use stable placeholder IPs (mocked, not real —
+# the historical .2/.3/.4 values are arbitrary and never dialled).
 
 
 # ---------------------------------------------------------------------------

@@ -1,10 +1,13 @@
 // Grafana Alloy — SR Linux syslog ingestion (Issue #169)
 //
-// SR Linux nodes send RFC3164 syslog over UDP to the clab bridge gateway
+// SR Linux nodes send syslog over UDP to the clab bridge gateway
 // (172.20.20.1 = the OrbStack host), which forwards to the listener
-// published on host port 5514 (see docker-compose-deps.yml). Messages are
-// normalized (hostname → device, severity/facility/app labels) and pushed
-// to Loki, where they are queryable from Grafana.
+// published on host port 5514 (see docker-compose-deps.yml). SR Linux
+// emits RSYSLOG_SyslogProtocol23Format — RFC5424-style framing (verified
+// from the rsyslog config it generates on-device); an rfc3164 listener
+// drops every message with a parse error. Messages are normalized
+// (hostname → device, severity/facility/app labels) and pushed to Loki,
+// where they are queryable from Grafana.
 //
 // Device-side config is pushed by:
 //   uv run python -m network_synapse.scripts.configure_syslog
@@ -13,7 +16,7 @@ loki.source.syslog "srlinux" {
   listener {
     address       = "0.0.0.0:5514"
     protocol      = "udp"
-    syslog_format = "rfc3164"
+    syslog_format = "rfc5424"
     labels        = {
       job = "srlinux-syslog",
     }

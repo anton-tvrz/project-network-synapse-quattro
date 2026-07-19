@@ -73,9 +73,9 @@ See [resource-manager.md](resource-manager.md) for details on pool allocation.
 
 | Device | Role | Type | Management IP | Containerlab Name | ASN |
 |--------|------|------|---------------|-------------------|-----|
-| spine01 | spine | 7220 IXR-D3 | 172.20.20.3/24 | clab-spine-leaf-lab-spine01 | 65000 |
-| leaf01 | leaf | 7220 IXR-D2 | 172.20.20.2/24 | clab-spine-leaf-lab-leaf01 | 65001 |
-| leaf02 | leaf | 7220 IXR-D2 | 172.20.20.4/24 | clab-spine-leaf-lab-leaf02 | 65002 |
+| spine01 | spine | 7220 IXR-D3 | 172.20.20.10/24 | clab-spine-leaf-lab-spine01 | 65000 |
+| leaf01 | leaf | 7220 IXR-D2 | 172.20.20.11/24 | clab-spine-leaf-lab-leaf01 | 65001 |
+| leaf02 | leaf | 7220 IXR-D2 | 172.20.20.12/24 | clab-spine-leaf-lab-leaf02 | 65002 |
 
 > **Note:** The Containerlab topology explicitly includes additional nodes (`firewall` (VyOS), `pc1`, `pc2`) that are excluded from the Infrahub Source of Truth as they are purely logical end-hosts for verifying data plane connectivity.
 

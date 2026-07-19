@@ -16,9 +16,11 @@ config), so mirroring that on the remote-server captures everything.
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+import yaml
 
 from network_synapse.scripts.configure_syslog import (
     DEFAULT_COLLECTOR_HOST,
@@ -81,7 +83,7 @@ class TestConfigureSyslog:
         client = _mock_gnmi_client({"response": [{"op": "UPDATE"}]})
         mock_cls.return_value = client
 
-        result = configure_syslog("spine01", "clab-spine-leaf-lab-spine01", "172.20.20.1", 5514)
+        result = configure_syslog("spine01", "172.20.20.10", "172.20.20.1", 5514)
 
         assert result is True
         (kwargs_or_args,) = client.set.call_args_list
@@ -94,7 +96,7 @@ class TestConfigureSyslog:
     def test_returns_false_when_device_does_not_acknowledge(self, mock_cls: MagicMock):
         mock_cls.return_value = _mock_gnmi_client({})
 
-        assert configure_syslog("spine01", "clab-spine-leaf-lab-spine01", "172.20.20.1", 5514) is False
+        assert configure_syslog("spine01", "172.20.20.10", "172.20.20.1", 5514) is False
 
     @patch("network_synapse.scripts.configure_syslog.resolve_credentials", return_value=("u", "p"))
     @patch("network_synapse.scripts.configure_syslog.gNMIclient")
@@ -102,7 +104,7 @@ class TestConfigureSyslog:
         """Secrets come from gnmi_settings, never from call sites (Issue #166)."""
         mock_cls.return_value = _mock_gnmi_client({"response": []})
 
-        configure_syslog("spine01", "clab-spine-leaf-lab-spine01", "172.20.20.1", 5514)
+        configure_syslog("spine01", "172.20.20.10", "172.20.20.1", 5514)
 
         mock_resolve.assert_called_once()
         assert mock_cls.call_args.kwargs["username"] == "u"
@@ -116,9 +118,18 @@ class TestConfigureSyslog:
 
 @pytest.mark.unit
 class TestFabricDevices:
-    def test_targets_all_fabric_nodes_via_clab_dns(self):
+    def test_targets_all_fabric_nodes_via_pinned_mgmt_ips(self):
+        """The script runs on the macOS host, where containerlab DNS names do
+        not resolve (docker-network DNS only) — it must use the static
+        mgmt-ipv4 pins from topology.clab.yml (Issue #178)."""
         assert FABRIC_DEVICES == {
-            "spine01": "clab-spine-leaf-lab-spine01",
-            "leaf01": "clab-spine-leaf-lab-leaf01",
-            "leaf02": "clab-spine-leaf-lab-leaf02",
+            "spine01": "172.20.20.10",
+            "leaf01": "172.20.20.11",
+            "leaf02": "172.20.20.12",
         }
+
+    def test_fabric_ips_match_topology_pins(self):
+        topology_path = Path(__file__).parents[2] / "containerlab" / "topology.clab.yml"
+        nodes = yaml.safe_load(topology_path.read_text())["topology"]["nodes"]
+        for hostname, address in FABRIC_DEVICES.items():
+            assert nodes[hostname]["mgmt-ipv4"] == address

@@ -33,11 +33,13 @@ logger = logging.getLogger(__name__)
 DEFAULT_COLLECTOR_HOST = "172.20.20.1"
 DEFAULT_SYSLOG_PORT = 5514
 
-# Fabric nodes by containerlab DNS name (mgmt IPs are DHCP-assigned).
+# Fabric nodes by pinned mgmt-ipv4 (topology.clab.yml, Issue #178).
+# The script runs on the macOS host, where containerlab DNS names do not
+# resolve — only containers on the docker network can use them.
 FABRIC_DEVICES = {
-    "spine01": "clab-spine-leaf-lab-spine01",
-    "leaf01": "clab-spine-leaf-lab-leaf01",
-    "leaf02": "clab-spine-leaf-lab-leaf02",
+    "spine01": "172.20.20.10",
+    "leaf01": "172.20.20.11",
+    "leaf02": "172.20.20.12",
 }
 
 

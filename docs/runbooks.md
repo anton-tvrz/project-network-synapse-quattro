@@ -29,7 +29,7 @@
    leaf03:
      kind: nokia_srlinux
      image: ghcr.io/nokia/srlinux:latest
-     mgmt-ipv4: 172.20.20.13
+     mgmt-ipv4: 172.20.20.16  # .10-.15 are taken by existing nodes
    ```
 
 3. **Add to Suzieq inventory:**
@@ -207,9 +207,9 @@ docker compose -f development/docker-compose-deps.yml up -d temporal
 2. **Alternatively, SSH directly (OrbStack makes 172.20.20.x reachable):**
 
    ```bash
-   ssh admin@172.20.20.3  # spine01
-   ssh admin@172.20.20.2  # leaf01
-   ssh admin@172.20.20.4  # leaf02
+   ssh admin@172.20.20.10  # spine01
+   ssh admin@172.20.20.11  # leaf01
+   ssh admin@172.20.20.12  # leaf02
    # Password: NokiaSrl1!
    ```
 
