@@ -108,7 +108,7 @@ class TestConfigureSyslog:
 
         mock_resolve.assert_called_once()
         assert mock_cls.call_args.kwargs["username"] == "u"
-        assert mock_cls.call_args.kwargs["password"] == "p"  # noqa: S105 — mock value, not a secret
+        assert mock_cls.call_args.kwargs["password"] == "p"
 
 
 # ---------------------------------------------------------------------------

@@ -9,6 +9,7 @@ dependencies = [
     "jinja2>=3.1",
     "pydantic>=2.5",
     "httpx>=0.25",
+    "prometheus-client>=0.20",
     "pyyaml>=6.0",
     "pygnmi>=0.8",
     "grpcio>=1.60",

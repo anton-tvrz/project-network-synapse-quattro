@@ -33,3 +33,10 @@ scrape_configs:
   - job_name: "gnmic"
     static_configs:
       - targets: ["gnmic:9273"]
+
+  # SuzieQ assert-based drift scores (Issue #74). The exporter runs on the
+  # host (uv run invoke collector.suzieq-exporter), reads the suzieq-rest API,
+  # and exposes suzieq_drift_score{device} + suzieq_drift_score_aggregate.
+  - job_name: "suzieq_exporter"
+    static_configs:
+      - targets: ["host.docker.internal:9275"]

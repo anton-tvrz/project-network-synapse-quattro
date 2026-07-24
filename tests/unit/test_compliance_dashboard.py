@@ -61,7 +61,7 @@ class TestInfluxDatasource:
 
     def test_datasource_token_comes_from_environment(self, influx_datasource: dict) -> None:
         """The token is injected via env var, not hardcoded in the provisioning file."""
-        assert influx_datasource["secureJsonData"]["token"] == "$INFLUXDB_TOKEN"  # noqa: S105
+        assert influx_datasource["secureJsonData"]["token"] == "$INFLUXDB_TOKEN"
 
 
 @pytest.mark.unit

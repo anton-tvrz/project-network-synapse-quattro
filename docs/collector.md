@@ -87,6 +87,51 @@ curl -s "http://localhost:8530/api/v2/interface/show?access_token=496157e6e869ef
 Both share `development/suzieq/suzieq-cfg.yml`. The API key is a static
 dev-only value; the API is bound to localhost.
 
+### Drift-score exporter (Issue #74)
+
+SuzieQ runs its own state assertions (`/api/v2/{table}/assert`) — BGP sessions
+established, interfaces up — against the collected snapshots. The
+`suzieq_exporter` turns that pass/fail output into Prometheus drift metrics,
+complementing the Infrahub-derived `compliance_posture` drift written to
+InfluxDB.
+
+- `backend/network_synapse/collector/suzieq_client.py` — the shared REST
+  client (assert-table fetch, env-driven config); higher layers reuse it.
+- `backend/network_synapse/collector/suzieq_drift.py` — scores each device as
+  its fraction of failing assertions across the `bgp` and `interface` tables,
+  and serves the gauges.
+
+Metrics (dedicated registry, scraped by the `suzieq_exporter` Prometheus job
+at `host.docker.internal:9275`):
+
+| Metric | Meaning |
+|--------|---------|
+| `suzieq_drift_score{device}` | Fraction of failing SuzieQ assertions per device (0..1) |
+| `suzieq_drift_score_aggregate` | Fleet-wide mean of the per-device scores (0..1) |
+
+```bash
+# Serve the exporter (refreshes every 60s, exposes :9275/metrics)
+uv run invoke collector.suzieq-exporter
+
+# One-shot look at the current scores without serving
+uv run invoke collector.suzieq-exporter --dry-run
+```
+
+Configuration is env-driven (`SUZIEQ_REST_URL`, `SUZIEQ_API_TOKEN`,
+`SUZIEQ_NAMESPACE`), defaulting to the dev stack. The exporter runs on the
+host — the same pattern as the Temporal worker's metrics endpoint — so
+Prometheus reaches it via `host.docker.internal`.
+
+Example queries:
+
+```promql
+# Devices with any assert failures
+suzieq_drift_score > 0
+
+# Fleet drift trend
+suzieq_drift_score_aggregate
+```
+
 ## Syslog ingestion (Alloy → Loki)
 
 SR Linux forwards syslog to the collector; Grafana Alloy listens on host
