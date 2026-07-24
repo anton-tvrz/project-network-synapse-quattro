@@ -62,12 +62,27 @@ class SuzieqClient:
         Returns the list of assert rows. Raises RuntimeError on any non-2xx
         response.
         """
-        params: dict[str, str] = {"access_token": self.token}
+        return self._get(table, "assert")
+
+    def show_table(self, table: str, **filters: str | None) -> list[dict]:
+        """Fetch the observed state rows for a SuzieQ table.
+
+        Extra keyword filters (e.g. ``hostname``, ``vrf``, ``ifname``) are
+        passed through as query parameters; ``None`` values are dropped so
+        callers can pass optional filters unconditionally. Raises
+        RuntimeError on any non-2xx response.
+        """
+        extra = {key: value for key, value in filters.items() if value is not None}
+        return self._get(table, "show", **extra)
+
+    def _get(self, table: str, verb: str, **extra: str) -> list[dict]:
+        """GET a SuzieQ ``/api/v2/{table}/{verb}`` endpoint and return its rows."""
+        params: dict[str, str] = {"access_token": self.token, **extra}
         if self.namespace:
             params["namespace"] = self.namespace
-        response = self._client.get(f"{self.url}/api/v2/{table}/assert", params=params)
+        response = self._client.get(f"{self.url}/api/v2/{table}/{verb}", params=params)
         if response.status_code // 100 != 2:
-            raise RuntimeError(f"suzieq assert {table} failed: {response.status_code} {response.text}")
+            raise RuntimeError(f"suzieq {verb} {table} failed: {response.status_code} {response.text}")
         return response.json()
 
     def close(self) -> None:

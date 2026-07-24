@@ -17,6 +17,7 @@ from synapse_workers.activities.override_activities import (
     record_override_revert_failure,
     revert_override_config,
     update_override_status,
+    validate_override_state,
 )
 from synapse_workers.activities.validation_activities import validate_bgp, validate_interfaces
 from synapse_workers.metrics import start_metrics_server
@@ -63,6 +64,7 @@ async def main() -> None:
             check_reversion_safety,
             update_override_status,
             record_override_extension,
+            validate_override_state,
         ],
     )
 

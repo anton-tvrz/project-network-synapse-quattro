@@ -18,10 +18,14 @@ Metric ownership per outcome:
 
 from __future__ import annotations
 
+import asyncio
 import os
 
 from temporalio import activity
 
+from network_synapse.collector.override_validation import ValidationResult
+from network_synapse.collector.override_validation import validate_override_state as _validate_override_state
+from network_synapse.collector.suzieq_client import SuzieqClient
 from network_synapse.infrahub.client import InfrahubConfigClient
 from network_synapse.scripts.validate_state import check_bgp_summary
 from synapse_workers.activities._gnmi_io import deploy_config_via_gnmi
@@ -126,6 +130,61 @@ async def check_reversion_safety(device_hostname: str, ip_address: str) -> bool:
     if not safe:
         activity.logger.warning(f"Reversion safety check failed on {device_hostname}: BGP sessions not established")
     return safe
+
+
+def _collect_and_validate(
+    device_hostname: str,
+    override_type: str,
+    target_bgp_peers: list[str],
+    target_interfaces: list[str],
+) -> ValidationResult:
+    """Fetch device-scoped SuzieQ state and run the override-aware validator.
+
+    Synchronous (httpx + parquet-backed REST); called off the event loop.
+    """
+    with SuzieqClient.from_env() as client:
+        bgp_rows = client.show_table("bgp", hostname=device_hostname)
+        interface_rows = client.show_table("interface", hostname=device_hostname)
+    return _validate_override_state(
+        device=device_hostname,
+        override_type=override_type,
+        target_bgp_peers=target_bgp_peers,
+        target_interfaces=target_interfaces,
+        bgp_rows=bgp_rows,
+        interface_rows=interface_rows,
+    )
+
+
+@activity.defn
+async def validate_override_state(
+    device_hostname: str,
+    override_type: str,
+    target_bgp_peers: list[str],
+    target_interfaces: list[str],
+) -> dict:
+    """Independently validate device state against override-aware expectations.
+
+    Uses SuzieQ (not the device's own gNMI answer) as the observer, so the
+    check corroborates the override from a second source. A targeted object is
+    expected down; everything else is expected healthy. Records the verdict in
+    the per-device state validation gauge and returns the serialized result so
+    the workflow can decide (it does not raise on an inconsistent verdict).
+    """
+    activity.logger.info(
+        "SuzieQ override validation: device=%s type=%s bgp_targets=%s iface_targets=%s",
+        device_hostname,
+        override_type,
+        target_bgp_peers,
+        target_interfaces,
+    )
+    result = await asyncio.to_thread(
+        _collect_and_validate, device_hostname, override_type, target_bgp_peers, target_interfaces
+    )
+    override_state_validation_result.labels(device=device_hostname).set(1 if result.consistent else 0)
+    if not result.consistent:
+        findings = [f"{v.object_id}={v.status}" for v in result.verdicts if v.status != "consistent"]
+        activity.logger.warning(f"SuzieQ override validation inconsistent on {device_hostname}: {findings}")
+    return result.to_dict()
 
 
 @activity.defn
