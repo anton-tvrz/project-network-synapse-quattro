@@ -53,7 +53,7 @@ class TestClientConstruction:
     def test_token_defaults_from_env(self, monkeypatch):
         monkeypatch.setenv("INFRAHUB_TOKEN", "env-token")
         client = InfrahubConfigClient(url="http://test:8000")
-        assert client.token == "env-token"  # noqa: S105
+        assert client.token == "env-token"
 
     def test_headers_with_token(self):
         client = InfrahubConfigClient(url="http://test:8000", token="my-key")

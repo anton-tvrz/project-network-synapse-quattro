@@ -226,6 +226,14 @@ class TestPrometheusScrapesGnmic:
         targets = [t for sc in jobs["gnmic"]["static_configs"] for t in sc["targets"]]
         assert "gnmic:9273" in targets
 
+    def test_suzieq_exporter_scrape_job_present(self):
+        """The SuzieQ drift exporter (Issue #74) runs on the host and is scraped."""
+        prometheus = yaml.safe_load(PROMETHEUS_CONFIG_PATH.read_text())
+        jobs = {job["job_name"]: job for job in prometheus["scrape_configs"]}
+        assert "suzieq_exporter" in jobs
+        targets = [t for sc in jobs["suzieq_exporter"]["static_configs"] for t in sc["targets"]]
+        assert "host.docker.internal:9275" in targets
+
 
 # ---------------------------------------------------------------------------
 # Syslog ingestion (Loki + Alloy)

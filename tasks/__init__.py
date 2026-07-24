@@ -9,7 +9,7 @@ Usage:
 
 from invoke import Collection
 
-from . import backend, dev, docs, main, workers
+from . import backend, collector, dev, docs, main, workers
 
 ns = Collection()
 
@@ -21,6 +21,7 @@ ns.add_task(main.check_all, name="check-all")
 
 # Sub-collections
 ns.add_collection(Collection.from_module(backend), name="backend")
+ns.add_collection(Collection.from_module(collector), name="collector")
 ns.add_collection(Collection.from_module(workers), name="workers")
 ns.add_collection(Collection.from_module(dev), name="dev")
 ns.add_collection(Collection.from_module(docs), name="docs")
