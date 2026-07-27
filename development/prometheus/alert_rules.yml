@@ -93,7 +93,7 @@ groups:
   #   temporal_worker_task_slots_available  -- Temporal SDK worker metrics
   #   override_revert_failures_total        -- override revert activity counter (#63)
   #   intent_orphaned_rules_count           -- worker intent metrics (#62, synapse_worker job)
-  #   drift_score                           -- SuzieQ custom exporter (#74)
+  #   suzieq_drift_score                    -- SuzieQ custom exporter (#74)
   #   intent_lineage_completeness_ratio     -- worker intent metrics (#62, synapse_worker job)
   #   suzieq_last_poll_timestamp_seconds    -- SuzieQ custom exporter (#74)
   #   support_tickets_opened_total          -- Golden Path adoption metrics (#77)
@@ -152,7 +152,7 @@ groups:
             hygiene checker to identify and reap them.
 
       - alert: DriftScoreElevated
-        expr: drift_score > 0.2
+        expr: suzieq_drift_score > 0.2
         for: 10m
         labels:
           severity: warning
@@ -190,6 +190,21 @@ groups:
             20 minutes (15-minute staleness threshold plus 5 minutes
             pending). Drift detection and state validation are operating
             on stale data.
+
+      - alert: SuzieqExporterDown
+        expr: up{job="suzieq_exporter"} == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SuzieQ drift exporter is not being scraped"
+          description: >-
+            Prometheus cannot scrape the SuzieQ drift exporter. It is a host
+            process started by `uv run invoke collector.suzieq-exporter`, not
+            a compose service, so the usual cause is simply that nobody
+            started it. While it is down, suzieq_drift_score is absent — which
+            reads identically to a fabric with zero drift, so DriftScoreElevated
+            cannot fire and the compliance drift panel is blank.
 
   - name: adoption
     rules:

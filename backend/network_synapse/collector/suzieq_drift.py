@@ -52,6 +52,11 @@ drift_score_aggregate_gauge = Gauge(
     "Fleet-wide mean of per-device SuzieQ drift scores (0..1)",
     registry=REGISTRY,
 )
+last_poll_timestamp_gauge = Gauge(
+    "suzieq_last_poll_timestamp_seconds",
+    "Unix timestamp of the last successful SuzieQ collection",
+    registry=REGISTRY,
+)
 
 
 def row_failed(row: dict) -> bool:
@@ -96,11 +101,18 @@ def collect_drift(client: SuzieqClient) -> dict[str, float]:
 
 
 def update_gauges(scores: dict[str, float]) -> None:
-    """Publish per-device and aggregate scores, clearing stale device series."""
+    """Publish per-device and aggregate scores, clearing stale device series.
+
+    Also stamps the poll timestamp — the SuzieQStale alert measures collection
+    freshness as ``time() - suzieq_last_poll_timestamp_seconds``, so a stalled
+    poller must leave the timestamp behind rather than simply stop updating
+    scores that would otherwise look plausibly current.
+    """
     drift_score_gauge.clear()
     for device, score in scores.items():
         drift_score_gauge.labels(device=device).set(score)
     drift_score_aggregate_gauge.set(drift_score_aggregate(scores))
+    last_poll_timestamp_gauge.set(time.time())
 
 
 def _refresh() -> dict[str, float]:

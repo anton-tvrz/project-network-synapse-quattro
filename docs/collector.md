@@ -108,6 +108,7 @@ at `host.docker.internal:9275`):
 |--------|---------|
 | `suzieq_drift_score{device}` | Fraction of failing SuzieQ assertions per device (0..1) |
 | `suzieq_drift_score_aggregate` | Fleet-wide mean of the per-device scores (0..1) |
+| `suzieq_last_poll_timestamp_seconds` | Unix time of the last successful collection (drives `SuzieQStale`) |
 
 ```bash
 # Serve the exporter (refreshes every 60s, exposes :9275/metrics)
@@ -121,6 +122,14 @@ Configuration is env-driven (`SUZIEQ_REST_URL`, `SUZIEQ_API_TOKEN`,
 `SUZIEQ_NAMESPACE`), defaulting to the dev stack. The exporter runs on the
 host — the same pattern as the Temporal worker's metrics endpoint — so
 Prometheus reaches it via `host.docker.internal`.
+
+> **It is not started by `invoke dev.deps`.** Start it explicitly, as part of
+> bring-up, alongside the worker and the portal. While it is down, the
+> `suzieq_drift_score` series is simply absent, which in PromQL reads exactly
+> like a fabric with zero drift: `DriftScoreElevated` cannot fire and the
+> Compliance Tracking drift panel is blank. The `SuzieqExporterDown` alert
+> (`up{job="suzieq_exporter"} == 0`) exists so this is loud rather than
+> silent.
 
 Example queries:
 
