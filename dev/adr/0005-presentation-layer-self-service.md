@@ -60,6 +60,22 @@ flowchart LR
     UI -. "read-only status" .-> T
 ```
 
+### Runtime placement (Issue #188)
+
+The portal runs as a **host process** via `uv run invoke presentation.start`, not
+as a `docker-compose-deps.yml` service. This matches the Temporal worker, which
+is also host-run: both import the uv workspace packages directly, so running
+them in-container would mean rebuilding an image on every code change during a
+demo or development loop. `dev.deps` stays what it says on the tin — the
+infrastructure the two host processes talk to.
+
+It listens on **8081**. 8080 is bound by the Temporal UI, and both surfaces need
+to be open simultaneously — the portal to initiate a workflow, the Temporal UI to
+show its durable execution.
+
+`PRESENTATION_API_KEYS` must be set before starting; unset, `parse_api_keys("")`
+yields no identities and every request is rejected with 401. See `.env.example`.
+
 ## Consequences
 
 ### Positive
@@ -72,6 +88,6 @@ flowchart LR
 
 ### Negative
 
-- One more service in the compose stack to build, test, and keep healthy
+- One more process to start and keep healthy, and one not supervised by compose
 - Static API keys are a lab-grade credential — production use requires the planned OIDC swap
 - A minimal HTML UI will lag the CLI in capability; power users will still prefer `invoke` tasks initially

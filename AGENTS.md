@@ -96,6 +96,9 @@ uv run invoke backend.typecheck         # MyPy type checking
 # Workers
 uv run invoke workers.start             # Start Temporal worker
 
+# Presentation
+uv run invoke presentation.start        # Start the self-service portal (8081)
+
 # Infrastructure
 uv run invoke dev.deps                  # Start infrastructure dependencies
 uv run invoke dev.deps-stop             # Stop infrastructure dependencies
@@ -290,6 +293,7 @@ SuzieQ is commented out (broken on Apple Silicon).
 | Task Manager       | 4200       | Prefect API                |
 | Temporal           | 7233       | gRPC endpoint              |
 | Temporal UI        | 8080       | Web dashboard              |
+| Presentation portal| 8081       | Self-service UI + API      |
 | Grafana            | 3000       | Dashboards                 |
 | Prometheus         | 9090       | Metrics + alerts           |
 | SR Linux (gNMI)    | 57400      | Per-device gNMI            |
