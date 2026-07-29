@@ -77,6 +77,11 @@ class TestNoDeprecatedSchemaKeys:
     def test_does_not_use_default_filter(self, nodes_by_kind: dict, kind: str) -> None:
         assert "default_filter" not in nodes_by_kind[kind]
 
+    @pytest.mark.parametrize("kind", ["ApplicationService", "ServiceEndpoint"])
+    def test_declares_an_explicit_human_friendly_id(self, nodes_by_kind: dict, kind: str) -> None:
+        """Seed data (#41) and lineage queries (#42) address objects by name."""
+        assert nodes_by_kind[kind].get("human_friendly_id") == ["name__value"]
+
 
 @pytest.mark.unit
 class TestApplicationService:
