@@ -169,3 +169,11 @@ nodes:
         kind: Attribute
         description: "Device carrying the realisation — first hop of a reverse audit"
         order_weight: 1110
+      - name: rule_sets
+        peer: FirewallRuleSet
+        identifier: infrastructure_binding__rule_sets
+        optional: true
+        cardinality: many
+        kind: Component
+        description: "Device-level rules realising this binding (#40)"
+        order_weight: 1120

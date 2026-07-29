@@ -1,0 +1,92 @@
+# Infrahub schema: Business Intent — device-level rule (Issue #40)
+#
+# Terminal object of the 5-object business intent chain (intent-model skill):
+#
+#   ApplicationService -> ServiceEndpoint -> ConnectivityIntent
+#     -> InfrastructureBinding -> FirewallRuleSet
+#
+# This is the object an auditor points at. Everything above it exists so that
+# a rule found on a device can be walked back to the person who asked for it,
+# and so that a rule whose intent has been decommissioned can be found before
+# an auditor finds it.
+#
+# `binding` is mandatory. A FirewallRuleSet with no InfrastructureBinding is
+# an orphan by construction, and making it impossible to create is cheaper
+# than detecting it later. The orphans the compliance check (#44) hunts are
+# the ones that *acquire* the condition — a rule whose intent moved to
+# `decommissioned` while the rule stayed deployed.
+#
+# Dependencies: connectivity_intent.yml (InfrastructureBinding) must be
+# loaded first.
+---
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+version: "1.0"
+
+nodes:
+  - name: RuleSet
+    namespace: Firewall
+    description: "A device-level firewall rule realising a connectivity intent"
+    label: Firewall Rule Set
+    icon: mdi:wall-fire
+    display_label: name__value
+    human_friendly_id:
+      - name__value
+    order_by:
+      - sequence__value
+    attributes:
+      - name: name
+        kind: Text
+        unique: true
+        description: "Rule set identifier in the SoT (e.g. trading-gw-to-md-permit)"
+        order_weight: 1000
+      - name: rule_name
+        kind: Text
+        description: "Identifier the rule carries on the device — what a reverse lookup matches"
+        order_weight: 1010
+      - name: sequence
+        kind: Number
+        default_value: 100
+        description: "Evaluation order; firewalls are first-match-wins, so this is intent"
+        order_weight: 1020
+      - name: action
+        kind: Dropdown
+        # Fail closed: a rule created without an explicit action must not
+        # silently permit traffic.
+        default_value: deny
+        description: "Whether matching traffic is permitted or denied"
+        order_weight: 1030
+        choices:
+          - name: permit
+            label: Permit
+            description: "Allow matching traffic"
+            color: "#A2D9CE"
+          - name: deny
+            label: Deny
+            description: "Drop matching traffic"
+            color: "#D98880"
+      - name: source_network
+        kind: IPNetwork
+        description: "Source prefix in CIDR form; validated on write, not on the device"
+        order_weight: 1040
+      - name: destination_network
+        kind: IPNetwork
+        description: "Destination prefix in CIDR form"
+        order_weight: 1050
+      - name: service_ports
+        kind: Text
+        description: "Ports this rule matches (e.g. 8443 or 9001-9010), from the endpoints"
+        order_weight: 1060
+      - name: origin
+        kind: Text
+        optional: true
+        description: "Change reference that produced this rule"
+        order_weight: 1070
+    relationships:
+      - name: binding
+        peer: InfrastructureBinding
+        identifier: infrastructure_binding__rule_sets
+        optional: false
+        cardinality: one
+        kind: Attribute
+        description: "Binding this rule realises — mandatory, so orphans cannot be created"
+        order_weight: 1100
