@@ -56,6 +56,10 @@ SCHEMA_LOAD_BATCHES = [
         "backend/network_synapse/schemas/network_interface.yml",
         "backend/network_synapse/schemas/bgp_session.yml",
         "backend/network_synapse/schemas/operational_override.yml",
+        # Business intent chain (#184). Order matters within the batch only
+        # for readability — infrahubctl loads a batch in a single call, so
+        # relationships between these files resolve together.
+        "backend/network_synapse/schemas/application_service.yml",
     ],
 ]
 

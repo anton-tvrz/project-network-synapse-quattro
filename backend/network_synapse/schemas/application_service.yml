@@ -1,0 +1,170 @@
+# Infrahub schema: Business Intent — service and endpoint roots (Issue #38)
+#
+# The first two objects of the 5-object business intent chain (see the
+# intent-model skill):
+#
+#   ApplicationService -> ServiceEndpoint -> ConnectivityIntent
+#     -> InfrastructureBinding -> FirewallRuleSet
+#
+# ApplicationService is where every reverse-audit query terminates. Asked
+# "which business owner asked for this firewall rule?", the walk runs back up
+# the chain and stops here — so `owner` is mandatory. A service without one
+# yields a lineage chain that answers every question except the one an audit
+# actually asks.
+#
+# Dropdowns rather than free text on environment/criticality/protocol: these
+# are the fields compliance reporting groups by, and "prod"/"Prod"/"production"
+# as three distinct strings makes "show me all production services"
+# unanswerable.
+#
+# This file defines no relationships to kinds outside itself, so it loads
+# independently of the base schemas. ConnectivityIntent (#39) attaches to
+# ServiceEndpoint from the other side.
+---
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+version: "1.0"
+
+nodes:
+  - name: Service
+    namespace: Application
+    description: "A business-level application service with an accountable owner"
+    label: Application Service
+    icon: mdi:application-braces-outline
+    display_label: name__value
+    order_by:
+      - name__value
+    attributes:
+      - name: name
+        kind: Text
+        unique: true
+        description: "Service identifier (e.g. trading-gateway)"
+        order_weight: 1000
+      - name: description
+        kind: Text
+        optional: true
+        description: "What this service does, in business terms"
+        order_weight: 1010
+      - name: owner
+        kind: Text
+        description: "Team or person accountable — the terminus of every audit query"
+        order_weight: 1020
+      - name: environment
+        kind: Dropdown
+        description: "Deployment environment this service instance represents"
+        default_value: development
+        order_weight: 1030
+        choices:
+          - name: production
+            label: Production
+            description: "Live, customer-affecting"
+            color: "#D98880"
+          - name: staging
+            label: Staging
+            description: "Pre-production verification"
+            color: "#F9E79F"
+          - name: development
+            label: Development
+            description: "Development and test"
+            color: "#A9CCE3"
+      - name: criticality
+        kind: Dropdown
+        description: "Business criticality, driving change-risk and approval policy"
+        default_value: P4
+        order_weight: 1040
+        choices:
+          - name: P1
+            label: P1 — Critical
+            description: "Revenue- or safety-critical; outage is a major incident"
+            color: "#D98880"
+          - name: P2
+            label: P2 — High
+            description: "Significant business impact"
+            color: "#F5B7B1"
+          - name: P3
+            label: P3 — Medium
+            description: "Limited business impact"
+            color: "#F9E79F"
+          - name: P4
+            label: P4 — Low
+            description: "Minimal business impact"
+            color: "#A9CCE3"
+      - name: origin
+        kind: Text
+        optional: true
+        description: "Change reference or ticket that introduced this service"
+        order_weight: 1050
+    relationships:
+      - name: endpoints
+        peer: ServiceEndpoint
+        identifier: application_service__endpoints
+        optional: true
+        cardinality: many
+        kind: Component
+        description: "Protocol/port endpoints exposed or consumed by this service"
+        order_weight: 1100
+
+  - name: Endpoint
+    namespace: Service
+    description: "A protocol/port endpoint belonging to an application service"
+    label: Service Endpoint
+    icon: mdi:lan-connect
+    display_label: name__value
+    order_by:
+      - name__value
+    attributes:
+      - name: name
+        kind: Text
+        unique: true
+        description: "Endpoint identifier (e.g. trading-gateway-fix-in)"
+        order_weight: 1000
+      - name: protocol
+        kind: Dropdown
+        description: "IP protocol carried by this endpoint"
+        default_value: tcp
+        order_weight: 1010
+        choices:
+          - name: tcp
+            label: TCP
+            description: "Transmission Control Protocol"
+            color: "#A9CCE3"
+          - name: udp
+            label: UDP
+            description: "User Datagram Protocol"
+            color: "#A2D9CE"
+          - name: icmp
+            label: ICMP
+            description: "Internet Control Message Protocol — no port"
+            color: "#D7BDE2"
+      - name: port
+        kind: Number
+        optional: true
+        description: "TCP/UDP port; omitted for ICMP, which has none"
+        order_weight: 1020
+      - name: direction
+        kind: Dropdown
+        description: "Whether the service listens on or originates this endpoint"
+        default_value: inbound
+        order_weight: 1030
+        choices:
+          - name: inbound
+            label: Inbound
+            description: "Service accepts connections on this endpoint"
+            color: "#A9CCE3"
+          - name: outbound
+            label: Outbound
+            description: "Service initiates connections from this endpoint"
+            color: "#F9E79F"
+      - name: origin
+        kind: Text
+        optional: true
+        description: "Change reference or ticket that introduced this endpoint"
+        order_weight: 1040
+    relationships:
+      - name: service
+        peer: ApplicationService
+        identifier: application_service__endpoints
+        optional: false
+        cardinality: one
+        kind: Attribute
+        description: "Owning service — the next hop up any reverse-audit walk"
+        order_weight: 1100
