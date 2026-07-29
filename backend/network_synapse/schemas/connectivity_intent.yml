@@ -1,0 +1,171 @@
+# Infrahub schema: Business Intent — connectivity and binding (Issue #39)
+#
+# Middle two objects of the 5-object business intent chain (intent-model skill):
+#
+#   ApplicationService -> ServiceEndpoint -> ConnectivityIntent
+#     -> InfrastructureBinding -> FirewallRuleSet
+#
+# ConnectivityIntent is the join — a declared need for two endpoints to
+# communicate, with the justification that makes it auditable. Its `status`
+# is what makes the orphaned-rule check (#44) possible: a FirewallRuleSet
+# still deployed under a `decommissioned` intent is exactly the audit
+# violation the platform exists to surface.
+#
+# InfrastructureBinding separates *what was asked for* from *how it was
+# realised*, so the same intent can be satisfied by a firewall rule today and
+# an ACL tomorrow without touching the business layer. It also carries the
+# device link, which is the first hop of any reverse-audit walk: you start
+# from a rule on a device and follow it back to a business owner.
+#
+# Dependencies: application_service.yml (ServiceEndpoint) and the base dcim
+# schema (DcimDevice) must be loaded first.
+---
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+version: "1.0"
+
+nodes:
+  - name: Intent
+    namespace: Connectivity
+    description: "A declared need for two service endpoints to communicate"
+    label: Connectivity Intent
+    icon: mdi:transit-connection-variant
+    display_label: name__value
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    attributes:
+      - name: name
+        kind: Text
+        unique: true
+        description: "Intent identifier (e.g. trading-gateway-to-market-data)"
+        order_weight: 1000
+      - name: status
+        kind: Dropdown
+        description: "Lifecycle state; drives orphaned-rule detection"
+        default_value: requested
+        order_weight: 1010
+        choices:
+          - name: requested
+            label: Requested
+            description: "Raised, awaiting approval — nothing deployed yet"
+            color: "#D5DBDB"
+          - name: approved
+            label: Approved
+            description: "Approved for provisioning"
+            color: "#F9E79F"
+          - name: active
+            label: Active
+            description: "Realised in infrastructure and in use"
+            color: "#A2D9CE"
+          - name: decommissioned
+            label: Decommissioned
+            description: "No longer needed — any surviving rule is an orphan"
+            color: "#D98880"
+      - name: justification
+        kind: Text
+        description: "Why this connectivity is needed — the audit's second question"
+        order_weight: 1020
+      - name: decommissioned_at
+        kind: DateTime
+        optional: true
+        description: "When the intent was retired; feeds intent_decommission_age_days"
+        order_weight: 1030
+      - name: owner
+        kind: Text
+        optional: true
+        description: "Team accountable for this intent, if not the service owner"
+        order_weight: 1040
+      - name: origin
+        kind: Text
+        optional: true
+        description: "Change reference or ticket that raised this intent"
+        order_weight: 1050
+    relationships:
+      # Two relationships to the same peer need separate identifiers —
+      # sharing one would collapse them and lose the direction of the flow.
+      - name: source_endpoint
+        peer: ServiceEndpoint
+        identifier: connectivity_intent__source_endpoint
+        optional: false
+        cardinality: one
+        kind: Attribute
+        description: "Endpoint initiating the communication"
+        order_weight: 1100
+      - name: destination_endpoint
+        peer: ServiceEndpoint
+        identifier: connectivity_intent__destination_endpoint
+        optional: false
+        cardinality: one
+        kind: Attribute
+        description: "Endpoint accepting the communication"
+        order_weight: 1110
+      - name: bindings
+        peer: InfrastructureBinding
+        identifier: connectivity_intent__bindings
+        optional: true
+        cardinality: many
+        kind: Component
+        description: "How this intent is realised — one per device/mechanism"
+        order_weight: 1120
+
+  - name: Binding
+    namespace: Infrastructure
+    description: "How a connectivity intent is realised on a specific device"
+    label: Infrastructure Binding
+    icon: mdi:link-variant
+    display_label: name__value
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    attributes:
+      - name: name
+        kind: Text
+        unique: true
+        description: "Binding identifier (e.g. trading-gw-to-md-fw01)"
+        order_weight: 1000
+      - name: binding_type
+        kind: Dropdown
+        description: "Mechanism used to realise the intent"
+        default_value: firewall_rule
+        order_weight: 1010
+        choices:
+          - name: firewall_rule
+            label: Firewall Rule
+            description: "Permit/deny rule on a firewall"
+            color: "#D98880"
+          - name: route_policy
+            label: Route Policy
+            description: "Routing policy or redistribution rule"
+            color: "#A9CCE3"
+          - name: acl
+            label: ACL
+            description: "Access control list on a switch or router"
+            color: "#F9E79F"
+          - name: load_balancer
+            label: Load Balancer
+            description: "Virtual server or pool member"
+            color: "#A2D9CE"
+      - name: origin
+        kind: Text
+        optional: true
+        description: "Change reference that created this binding"
+        order_weight: 1020
+    relationships:
+      - name: intent
+        peer: ConnectivityIntent
+        identifier: connectivity_intent__bindings
+        optional: false
+        cardinality: one
+        kind: Attribute
+        description: "Intent this binding realises — a binding without one is an orphan"
+        order_weight: 1100
+      - name: device
+        peer: DcimDevice
+        identifier: infrastructure_binding__device
+        optional: false
+        cardinality: one
+        kind: Attribute
+        description: "Device carrying the realisation — first hop of a reverse audit"
+        order_weight: 1110

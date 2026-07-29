@@ -31,6 +31,8 @@ nodes:
     label: Application Service
     icon: mdi:application-braces-outline
     display_label: name__value
+    human_friendly_id:
+      - name__value
     order_by:
       - name__value
     attributes:
@@ -109,6 +111,8 @@ nodes:
     label: Service Endpoint
     icon: mdi:lan-connect
     display_label: name__value
+    human_friendly_id:
+      - name__value
     order_by:
       - name__value
     attributes:

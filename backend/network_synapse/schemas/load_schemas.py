@@ -60,6 +60,7 @@ SCHEMA_LOAD_BATCHES = [
         # for readability — infrahubctl loads a batch in a single call, so
         # relationships between these files resolve together.
         "backend/network_synapse/schemas/application_service.yml",
+        "backend/network_synapse/schemas/connectivity_intent.yml",
     ],
 ]
 
