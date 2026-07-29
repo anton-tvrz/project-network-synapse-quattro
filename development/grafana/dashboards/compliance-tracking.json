@@ -20,7 +20,7 @@
       "type": "stat",
       "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0},
       "targets": [
-        {"expr": "config_drift_score", "legendFormat": "{{device}}", "refId": "A"}
+        {"expr": "suzieq_drift_score", "legendFormat": "{{device}}", "refId": "A"}
       ],
       "fieldConfig": {"defaults": {"thresholds": {"steps": [{"color": "green", "value": 0}, {"color": "yellow", "value": 1}, {"color": "red", "value": 5}]}}}
     },

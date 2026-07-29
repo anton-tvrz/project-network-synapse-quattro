@@ -106,10 +106,15 @@ The platform is designed to be brought up and down cleanly using the `invoke` ta
 2. `uv run invoke dev.lab-deploy` (Deploys Containerlab switches)
 3. `uv run invoke workers.start` (Starts your Python orchestration workers)
 4. `uv run invoke presentation.start` (Starts the self-service portal)
+5. `uv run invoke collector.suzieq-exporter` (Publishes drift scores to Prometheus)
+
+> Steps 3–5 are host processes, not containers — `dev.deps` does not start
+> them. Skip step 5 and the drift alerts and the Compliance Tracking drift
+> panel read empty, which is indistinguishable from a fabric with no drift.
 
 ### 🔴 Shutting Down
 When finished, tear down the environment to free up resources:
-1. Stop the portal and the python worker (`Ctrl+C` in their terminals)
+1. Stop the host processes — worker, portal, drift exporter (`Ctrl+C` in their terminals)
 2. `uv run invoke dev.lab-destroy` (Destroys the network lab)
 3. `uv run invoke dev.deps-stop` (Stops the infrastructure containers)
 

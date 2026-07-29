@@ -8,6 +8,7 @@ exposed on a /metrics endpoint scraped by Prometheus (job suzieq_exporter).
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
@@ -100,6 +101,37 @@ class TestUpdateGauges:
             if s.name == "suzieq_drift_score"
         }
         assert devices == {"leaf01"}
+
+    def test_stamps_the_last_poll_timestamp(self) -> None:
+        """SuzieQStale measures ``time() - suzieq_last_poll_timestamp_seconds``."""
+        before = time.time()
+        sd.update_gauges({"spine01": 0.0})
+        stamped = {
+            s.name: s.value
+            for metric in sd.REGISTRY.collect()
+            for s in metric.samples
+            if s.name == "suzieq_last_poll_timestamp_seconds"
+        }
+        assert stamped["suzieq_last_poll_timestamp_seconds"] >= before
+
+    def test_poll_timestamp_advances_on_each_refresh(self) -> None:
+        """A stalled poller must leave an ageing timestamp, not a frozen score."""
+
+        def stamp() -> float:
+            return next(
+                s.value
+                for metric in sd.REGISTRY.collect()
+                for s in metric.samples
+                if s.name == "suzieq_last_poll_timestamp_seconds"
+            )
+
+        with patch("network_synapse.collector.suzieq_drift.time.time", return_value=1000.0):
+            sd.update_gauges({"spine01": 0.0})
+            first = stamp()
+        with patch("network_synapse.collector.suzieq_drift.time.time", return_value=2000.0):
+            sd.update_gauges({"spine01": 0.0})
+            second = stamp()
+        assert (first, second) == (1000.0, 2000.0)
 
 
 class TestMain:
