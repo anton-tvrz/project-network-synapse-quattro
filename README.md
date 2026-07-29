@@ -92,6 +92,9 @@ uv run invoke workers.start
 
 # Deploy the network lab (switches)
 uv run invoke dev.lab-deploy
+
+# Start the self-service portal (http://localhost:8081)
+uv run invoke presentation.start
 ```
 
 ## Platform Management
@@ -102,10 +105,11 @@ The platform is designed to be brought up and down cleanly using the `invoke` ta
 1. `uv run invoke dev.deps` (Starts Infrahub, Temporal, Telemetry)
 2. `uv run invoke dev.lab-deploy` (Deploys Containerlab switches)
 3. `uv run invoke workers.start` (Starts your Python orchestration workers)
+4. `uv run invoke presentation.start` (Starts the self-service portal)
 
 ### 🔴 Shutting Down
 When finished, tear down the environment to free up resources:
-1. Stop your python worker (`Ctrl+C` in its terminal)
+1. Stop the portal and the python worker (`Ctrl+C` in their terminals)
 2. `uv run invoke dev.lab-destroy` (Destroys the network lab)
 3. `uv run invoke dev.deps-stop` (Stops the infrastructure containers)
 
@@ -140,6 +144,7 @@ uv run invoke backend.test-all    # All tests with coverage
 uv run invoke backend.load-schemas  # Load schemas into Infrahub
 uv run invoke backend.seed-data   # Seed data into Infrahub
 uv run invoke workers.start       # Start Temporal worker
+uv run invoke presentation.start  # Start the self-service portal (8081)
 uv run invoke dev.deps            # Start infrastructure dependencies
 ```
 
