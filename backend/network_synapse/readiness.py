@@ -27,9 +27,11 @@ import os
 import socket
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Protocol
 
 import httpx
+import yaml
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -157,6 +159,44 @@ def format_summary(results: list[ProbeResult]) -> str:
             line += f"\n        {result.detail}\n        fix: {result.probe.hint}"
         lines.append(line)
     return "\n".join(lines)
+
+
+GNMI_PORT = 57400
+SRLINUX_KIND = "nokia_srlinux"
+DEFAULT_TOPOLOGY = Path(__file__).resolve().parents[2] / "containerlab" / "topology.clab.yml"
+
+
+def lab_probes(topology: Path = DEFAULT_TOPOLOGY) -> list[Probe]:
+    """gNMI readiness probes for every SR Linux node in the topology.
+
+    ``containerlab deploy`` returns once containers have *started*, but SR
+    Linux takes another 30-60s before gNMI accepts connections — so a demo
+    that deploys the lab and immediately runs a workflow hits a closed port.
+
+    Nodes are read from the topology file rather than listed here, so adding
+    a leaf doesn't require editing this module. Only SR Linux nodes are
+    probed; the Linux nodes (firewall, pc1, pc2) have no gNMI listener.
+    """
+    if not topology.is_file():
+        return []
+    parsed = yaml.safe_load(topology.read_text()) or {}
+    nodes = parsed.get("topology", {}).get("nodes", {}) or {}
+    probes = []
+    for name, node in nodes.items():
+        if (node or {}).get("kind") != SRLINUX_KIND:
+            continue
+        address = (node or {}).get("mgmt-ipv4")
+        if not address:
+            continue
+        probes.append(
+            Probe(
+                name=name,
+                kind="tcp",
+                target=f"{address}:{GNMI_PORT}",
+                hint="uv run invoke dev.lab-deploy (SR Linux needs 30-60s after the container starts)",
+            )
+        )
+    return probes
 
 
 def demo_probes() -> list[Probe]:

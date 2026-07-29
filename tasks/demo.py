@@ -28,6 +28,7 @@ from network_synapse.readiness import (
     all_ready,
     demo_probes,
     format_summary,
+    lab_probes,
     run_probe,
     wait_until_ready,
 )
@@ -38,6 +39,10 @@ if TYPE_CHECKING:
 from .shared import PROJECT_ROOT, execute_command
 
 DEPS_COMPOSE = f"{PROJECT_ROOT}/development/docker-compose-deps.yml"
+
+# Containerlab prefixes every node with clab-<lab name>-; the lab name is
+# `spine-leaf-lab` in containerlab/topology.clab.yml.
+LAB_CONTAINER_PREFIX = "clab-spine-leaf-lab-"
 
 NEXT_STEPS = """
 Stack is up. Start the host processes, each in its own terminal:
@@ -65,6 +70,16 @@ def _docker_available(ctx: Context) -> bool:
     """True if a Docker daemon is reachable."""
     result = ctx.run("docker info", hide=True, warn=True)
     return bool(result and result.ok)
+
+
+def _lab_containers_exist(ctx: Context) -> bool:
+    """True if any node of the lab topology is already present (any state)."""
+    result = ctx.run(
+        f"docker ps -a --filter name={LAB_CONTAINER_PREFIX} --format '{{{{.Names}}}}'",
+        hide=True,
+        warn=True,
+    )
+    return bool(result and result.ok and result.stdout.strip())
 
 
 def _confirm(prompt: str) -> bool:
@@ -115,8 +130,23 @@ def up(ctx: Context, skip_lab: bool = False, timeout: int = DEFAULT_TIMEOUT_SECO
     execute_command(ctx, "uv run invoke backend.seed-data")
 
     if not skip_lab:
-        print("==> Deploying the Containerlab topology")
-        execute_command(ctx, "uv run invoke dev.lab-deploy")
+        # Containerlab aborts if any node already exists — including when the
+        # lab is in a stale half-state, which is exactly when re-running
+        # matters most. Recreate instead: the lab holds no source of truth,
+        # its config is regenerated from Infrahub by the pipeline.
+        existing = _lab_containers_exist(ctx)
+        if existing:
+            print("==> Redeploying the Containerlab topology (existing nodes will be recreated)")
+        else:
+            print("==> Deploying the Containerlab topology")
+        flag = " --reconfigure" if existing else ""
+        execute_command(ctx, f"uv run invoke dev.lab-deploy{flag}")
+
+        print("==> Waiting for gNMI on the SR Linux nodes")
+        lab_results = wait_until_ready(lab_probes(), timeout=timeout, interval=DEFAULT_INTERVAL_SECONDS)
+        _report(lab_results)
+        if not all_ready(lab_results):
+            raise Exit("Lab nodes did not come up; gNMI is not reachable. See the hints above.", code=1)
 
     print(NEXT_STEPS)
 

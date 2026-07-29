@@ -62,17 +62,41 @@ def generate_configs(
     execute_command(ctx, cmd, warn=True)
 
 
+def ensure_infrahubctl_env() -> None:
+    """Populate infrahubctl's env vars from the SDK-style ones if unset.
+
+    ``infrahubctl`` reads INFRAHUB_ADDRESS / INFRAHUB_API_TOKEN; the Python
+    SDK and our own client read INFRAHUB_URL / INFRAHUB_TOKEN. That split is
+    an upstream detail, not something an operator should have to know — and
+    anyone who set up from the older docs has only the SDK pair, so
+    `load-schemas` failed for them with an error naming variables that
+    .env.example did not mention (Issue #189).
+
+    Explicitly-set infrahubctl vars always win.
+    """
+    fallbacks = {"INFRAHUB_ADDRESS": "INFRAHUB_URL", "INFRAHUB_API_TOKEN": "INFRAHUB_TOKEN"}
+    missing = []
+    for target, source in fallbacks.items():
+        if os.getenv(target):
+            continue
+        value = os.getenv(source)
+        if value:
+            os.environ[target] = value
+        else:
+            missing.append(f"{target} (or {source})")
+    if missing:
+        raise RuntimeError(f"Missing required env vars: {', '.join(missing)}. See .env.example")
+
+
 @task
 def load_schemas(ctx: Context) -> None:
     """Load schemas into Infrahub via infrahubctl.
 
     Loads in 3 batches (base -> extensions -> project) to respect dependencies.
-    Requires INFRAHUB_ADDRESS and INFRAHUB_API_TOKEN env vars (set in .env).
+    Needs INFRAHUB_ADDRESS/INFRAHUB_API_TOKEN, or the INFRAHUB_URL/INFRAHUB_TOKEN
+    pair to derive them from. Both are set in .env.
     """
-    required_vars = ["INFRAHUB_ADDRESS", "INFRAHUB_API_TOKEN"]
-    missing = [v for v in required_vars if not os.getenv(v)]
-    if missing:
-        raise RuntimeError(f"Missing required env vars: {', '.join(missing)}. See .env.example")
+    ensure_infrahubctl_env()
 
     batch_names = ["base", "extensions", "project"]
     # infrahubctl schema load performs atomic validation and guarantees schema integrity

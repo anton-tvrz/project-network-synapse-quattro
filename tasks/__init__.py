@@ -10,6 +10,11 @@ Usage:
 from invoke import Collection
 
 from . import backend, collector, demo, dev, docs, main, presentation, workers
+from .shared import load_env_file
+
+# Load .env before any task runs, so tasks see the repo's configured values
+# rather than whatever happens to be exported in the caller's shell (#189).
+load_env_file()
 
 ns = Collection()
 

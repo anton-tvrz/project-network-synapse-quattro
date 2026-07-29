@@ -23,8 +23,9 @@ from tasks import demo
 
 @pytest.fixture
 def ctx(monkeypatch: pytest.MonkeyPatch) -> Context:
-    """A context whose Docker preflight passes; override per-test to fail it."""
+    """A context with Docker up and no pre-existing lab; override per-test."""
     monkeypatch.setattr(demo, "_docker_available", lambda ctx: True)
+    monkeypatch.setattr(demo, "_lab_containers_exist", lambda ctx: False)
     return Context()
 
 
@@ -107,6 +108,49 @@ class TestDemoUp:
         _ready(monkeypatch, ready=True)
         demo.up(ctx, skip_lab=True)
         assert not any("lab-deploy" in cmd for cmd in commands)
+
+    def test_reconfigures_an_existing_lab_instead_of_failing(self, ctx, commands, monkeypatch) -> None:
+        """Re-running is the normal case when rehearsing a demo.
+
+        Plain `containerlab deploy` aborts with "containers already exist" —
+        including when the lab is in a stale half-state, which is exactly
+        when you most want to re-run.
+        """
+        _ready(monkeypatch, ready=True)
+        monkeypatch.setattr(demo, "_lab_containers_exist", lambda ctx: True)
+        demo.up(ctx)
+        deploy = next(cmd for cmd in commands if "lab-deploy" in cmd)
+        assert "--reconfigure" in deploy
+
+    def test_waits_for_gnmi_after_deploying_the_lab(self, ctx, commands, monkeypatch) -> None:
+        """containerlab returns before SR Linux gNMI is listening."""
+        order = _ready(monkeypatch, ready=True)
+        monkeypatch.setattr(demo, "execute_command", lambda c, cmd, **kw: (commands.append(cmd), order.append(cmd))[0])
+        demo.up(ctx)
+        deploy_at = next(i for i, step in enumerate(order) if "lab-deploy" in step)
+        # readiness is recorded twice: stack first, lab second
+        assert order.count("readiness") == 2
+        assert order.index("readiness", deploy_at) > deploy_at
+
+    def test_aborts_when_gnmi_never_comes_up(self, ctx, commands, monkeypatch) -> None:
+        calls = {"n": 0}
+
+        def fake_wait(probes, **kwargs):
+            calls["n"] += 1
+            # stack ready, lab never ready
+            ok = calls["n"] == 1
+            return [ProbeResult(_probe("spine01"), ok, "" if ok else "connection refused")]
+
+        monkeypatch.setattr(demo, "wait_until_ready", fake_wait)
+        with pytest.raises(Exit):
+            demo.up(ctx)
+
+    def test_deploys_cleanly_when_no_lab_exists(self, ctx, commands, monkeypatch) -> None:
+        _ready(monkeypatch, ready=True)
+        monkeypatch.setattr(demo, "_lab_containers_exist", lambda ctx: False)
+        demo.up(ctx)
+        deploy = next(cmd for cmd in commands if "lab-deploy" in cmd)
+        assert "--reconfigure" not in deploy
 
 
 # ---------------------------------------------------------------------------

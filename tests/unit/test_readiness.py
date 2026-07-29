@@ -205,6 +205,47 @@ class TestDemoProbes:
 
 
 @pytest.mark.unit
+class TestLabProbes:
+    """`containerlab deploy` returns when containers *start*; SR Linux needs
+    another 30-60s before gNMI accepts connections. A demo that deploys the
+    lab and immediately runs a workflow hits a closed port."""
+
+    def test_probes_every_srlinux_node(self) -> None:
+        names = {probe.name for probe in readiness.lab_probes()}
+        assert names == {"spine01", "leaf01", "leaf02"}
+
+    def test_skips_non_srlinux_nodes(self) -> None:
+        """firewall/pc1/pc2 are Linux containers with no gNMI listener."""
+        names = {probe.name for probe in readiness.lab_probes()}
+        assert not names & {"firewall", "pc1", "pc2"}
+
+    def test_targets_the_gnmi_port_on_each_management_ip(self) -> None:
+        targets = {probe.target for probe in readiness.lab_probes()}
+        assert targets == {"172.20.20.10:57400", "172.20.20.11:57400", "172.20.20.12:57400"}
+
+    def test_derives_nodes_from_the_topology_file(self, tmp_path) -> None:
+        """Adding a leaf to the topology must not require editing this code."""
+        topo = tmp_path / "t.clab.yml"
+        topo.write_text(
+            "name: x\n"
+            "topology:\n"
+            "  nodes:\n"
+            "    leaf99:\n"
+            "      kind: nokia_srlinux\n"
+            "      mgmt-ipv4: 10.0.0.9\n"
+            "    srv01:\n"
+            "      kind: linux\n"
+            "      mgmt-ipv4: 10.0.0.10\n"
+        )
+        probes = readiness.lab_probes(topo)
+        assert [(p.name, p.target) for p in probes] == [("leaf99", "10.0.0.9:57400")]
+
+    def test_every_probe_carries_a_remediation_hint(self) -> None:
+        for probe in readiness.lab_probes():
+            assert probe.hint
+
+
+@pytest.mark.unit
 class TestReporting:
     def test_summary_lists_down_services_with_their_hints(self) -> None:
         probe = replace(_probe("infrahub"), hint="uv run invoke dev.deps")
