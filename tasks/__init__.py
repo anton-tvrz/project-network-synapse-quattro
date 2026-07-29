@@ -9,7 +9,7 @@ Usage:
 
 from invoke import Collection
 
-from . import backend, collector, dev, docs, main, presentation, workers
+from . import backend, collector, demo, dev, docs, main, presentation, workers
 
 ns = Collection()
 
@@ -25,4 +25,5 @@ ns.add_collection(Collection.from_module(collector), name="collector")
 ns.add_collection(Collection.from_module(workers), name="workers")
 ns.add_collection(Collection.from_module(presentation), name="presentation")
 ns.add_collection(Collection.from_module(dev), name="dev")
+ns.add_collection(Collection.from_module(demo), name="demo")
 ns.add_collection(Collection.from_module(docs), name="docs")

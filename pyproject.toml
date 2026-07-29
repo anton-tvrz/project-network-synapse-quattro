@@ -133,6 +133,7 @@ ignore = [
     "S106",    # hardcoded passwords in test fixtures
     "PLR2004", # magic values in tests
     "ARG001",  # unused fixtures
+    "ARG005",  # test doubles must match a signature they don't fully use
     "SLF001",  # private access in tests
     "PT004",   # fixture doesn't return anything
     "PLC0415", # imports inside test functions (testing importability)
