@@ -1,0 +1,133 @@
+# Business intent seed data — example trading application chain (Issue #41)
+#
+# Populates the 5-object chain (#38, #39, #40) so the lineage the schemas make
+# possible has something to demonstrate:
+#
+#   ApplicationService -> ServiceEndpoint -> ConnectivityIntent
+#     -> InfrastructureBinding -> FirewallRuleSet
+#
+# Two scenarios, deliberately:
+#
+#   1. trading-gateway -> market-data-feed, status `active`.
+#      The "every rule traces back to a business owner" beat.
+#
+#   2. legacy-reporting -> market-data-feed, status `decommissioned`, with its
+#      firewall rule still deployed. This is an orphan — the compliance
+#      violation the platform exists to surface. Without seeded data for it,
+#      the orphan check (#44) and the Compliance dashboard have nothing to
+#      show, and a demo cannot prove the detection works.
+#
+# Bindings target leaf02 because it is the only seeded device in the traffic
+# path: the lab's `firewall` node is not yet modelled in the SoT (#186), and
+# nothing configures it yet (#185). Once both land, these bindings move to the
+# firewall node and the rules become enforceable rather than declarative.
+---
+application_services:
+  - name: trading-gateway
+    description: "FIX order entry gateway for the electronic trading desk"
+    owner: markets-platform-team
+    environment: production
+    criticality: P1
+    origin: CHG-1042
+
+  - name: market-data-feed
+    description: "Normalised market data distribution service"
+    owner: data-services-team
+    environment: production
+    criticality: P2
+    origin: CHG-0871
+
+  - name: legacy-reporting
+    description: "Retired end-of-day reporting batch — decommissioned 2026-06"
+    owner: risk-reporting-team
+    environment: production
+    criticality: P4
+    origin: CHG-0455
+
+service_endpoints:
+  - name: trading-gateway-fix-out
+    service: trading-gateway
+    protocol: tcp
+    port: 9001
+    direction: outbound
+    origin: CHG-1042
+
+  - name: market-data-feed-in
+    service: market-data-feed
+    protocol: tcp
+    port: 9001
+    direction: inbound
+    origin: CHG-0871
+
+  - name: legacy-reporting-query-out
+    service: legacy-reporting
+    protocol: tcp
+    port: 5432
+    direction: outbound
+    origin: CHG-0455
+
+  - name: market-data-archive-in
+    service: market-data-feed
+    protocol: tcp
+    port: 5432
+    direction: inbound
+    origin: CHG-0455
+
+connectivity_intents:
+  - name: trading-gw-to-market-data
+    status: active
+    justification: >-
+      FIX order flow from the trading gateway to the market data feed.
+      Required for electronic trading during market hours.
+    owner: markets-platform-team
+    origin: CHG-1042
+    source_endpoint: trading-gateway-fix-out
+    destination_endpoint: market-data-feed-in
+
+  # Retired intent whose rule was never reaped — the seeded orphan.
+  - name: legacy-reporting-to-archive
+    status: decommissioned
+    decommissioned_at: "2026-06-15T09:00:00Z"
+    justification: >-
+      End-of-day reporting batch pulled from the market data archive.
+      Service retired June 2026; this intent should have taken its
+      firewall rule with it.
+    owner: risk-reporting-team
+    origin: CHG-0455
+    source_endpoint: legacy-reporting-query-out
+    destination_endpoint: market-data-archive-in
+
+infrastructure_bindings:
+  - name: trading-gw-to-md-leaf02
+    binding_type: firewall_rule
+    intent: trading-gw-to-market-data
+    device: leaf02
+    origin: CHG-1042
+
+  - name: legacy-reporting-to-archive-leaf02
+    binding_type: firewall_rule
+    intent: legacy-reporting-to-archive
+    device: leaf02
+    origin: CHG-0455
+
+firewall_rule_sets:
+  - name: trading-gw-to-md-permit
+    rule_name: permit-fix-9001
+    sequence: 100
+    action: permit
+    source_network: 10.10.1.0/24
+    destination_network: 10.10.2.0/24
+    service_ports: "9001"
+    binding: trading-gw-to-md-leaf02
+    origin: CHG-1042
+
+  # Still deployed, but its intent is decommissioned: the orphan.
+  - name: legacy-reporting-permit
+    rule_name: permit-legacy-5432
+    sequence: 200
+    action: permit
+    source_network: 10.10.9.0/24
+    destination_network: 10.10.2.0/24
+    service_ports: "5432"
+    binding: legacy-reporting-to-archive-leaf02
+    origin: CHG-0455
