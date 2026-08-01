@@ -56,7 +56,7 @@ def load_schemas_once(infrahub_url):
 
     Runs ``load_schemas.py`` via subprocess so it mirrors the CI workflow.
     """
-    script = BACKEND_ROOT / "network_synapse" / "scripts" / "load_schemas.py"
+    script = BACKEND_ROOT / "network_synapse" / "schemas" / "load_schemas.py"
     if not script.exists():
         pytest.skip("load_schemas.py not found")
 

@@ -23,6 +23,10 @@ check_definitions:
     file_path: "backend/network_synapse/checks/interface_consistency_check.py"
     class_name: "InterfaceConsistencyCheck"
 
+  - name: "validate_orphaned_rules"
+    file_path: "backend/network_synapse/checks/orphaned_rules_check.py"
+    class_name: "OrphanedRulesCheck"
+
 queries:
   - name: "device_bgp_config"
     file_path: "backend/network_synapse/queries/device_bgp_config.gql"
@@ -38,3 +42,6 @@ queries:
 
   - name: "all_device_interfaces"
     file_path: "backend/network_synapse/queries/all_device_interfaces.gql"
+
+  - name: "decommissioned_intents"
+    file_path: "backend/network_synapse/queries/decommissioned_intents.gql"

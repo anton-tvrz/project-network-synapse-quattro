@@ -1,0 +1,37 @@
+query DecommissionedIntents {
+    ConnectivityIntent(status__value: "decommissioned") {
+        edges {
+            node {
+                id
+                name { value }
+                decommissioned_at { value }
+                owner { value }
+                origin { value }
+                bindings {
+                    edges {
+                        node {
+                            id
+                            name { value }
+                            device {
+                                node {
+                                    name { value }
+                                }
+                            }
+                            rule_sets {
+                                edges {
+                                    node {
+                                        id
+                                        name { value }
+                                        rule_name { value }
+                                        action { value }
+                                        sequence { value }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
