@@ -5,6 +5,11 @@ is that `decommissioned_intents.gql` is valid against the live schema, that the
 one-hop filter limitation is actually worked around, and that Infrahub's real
 response shape matches what the check parses. That is what these cover.
 
+The check is constructed with an explicit `branch`. Every log call reads
+`InfrahubCheck.branch_name`, which otherwise asks git for the active branch and
+raises `IndexError` on a detached HEAD — how CI checks out pull requests.
+Infrahub supplies the branch when it runs the check for real.
+
 Scope note: the session fixture seeds `seed_small.yml`, which has no `leaf02`.
 The business-intent bindings target `leaf02`, so they — and the firewall rules
 hanging off them — are skipped here. A detected orphan therefore cannot be
@@ -64,14 +69,14 @@ class TestOrphanedRulesCheckAgainstLiveData:
     @pytest.mark.asyncio
     async def test_check_runs_against_live_response(self, decommissioned_intents_result):
         """A shape mismatch between mocks and Infrahub would surface here."""
-        check = OrphanedRulesCheck()
+        check = OrphanedRulesCheck(branch="main")
         await check.validate(decommissioned_intents_result)
         assert check.logs, "check must report something, even on a clean fabric"
 
     @pytest.mark.asyncio
     async def test_every_reported_orphan_is_actionable(self, decommissioned_intents_result):
         """Whatever is flagged must name the object an operator has to delete."""
-        check = OrphanedRulesCheck()
+        check = OrphanedRulesCheck(branch="main")
         await check.validate(decommissioned_intents_result)
 
         for error in check.errors:

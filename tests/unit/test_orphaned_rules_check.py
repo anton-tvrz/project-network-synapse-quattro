@@ -13,6 +13,17 @@ import pytest
 from network_synapse.checks.orphaned_rules_check import OrphanedRulesCheck
 
 
+def _make_check() -> OrphanedRulesCheck:
+    """Build the check with an explicit branch.
+
+    Every log call reads ``InfrahubCheck.branch_name``, which otherwise asks git
+    for the active branch — and that raises ``IndexError`` on a detached HEAD,
+    which is how CI checks out pull requests. Infrahub supplies the branch when
+    it runs the check for real; tests must not depend on the checkout state.
+    """
+    return OrphanedRulesCheck(branch="main")
+
+
 def _make_rule(
     *,
     name: str = "legacy-reporting-permit",
@@ -82,14 +93,14 @@ class TestOrphanedRulesCheck:
     @pytest.mark.asyncio
     async def test_no_decommissioned_intents_passes(self):
         """A fabric with nothing retired has no orphans."""
-        check = OrphanedRulesCheck()
+        check = _make_check()
         await check.validate(_data([]))
         assert not check.errors
 
     @pytest.mark.asyncio
     async def test_decommissioned_intent_without_rules_passes(self):
         """A retired intent whose rules were reaped is clean, not an orphan."""
-        check = OrphanedRulesCheck()
+        check = _make_check()
         binding = _make_binding(rules=[])
         await check.validate(_data([_make_intent(bindings=[binding])]))
         assert not check.errors
@@ -97,21 +108,21 @@ class TestOrphanedRulesCheck:
     @pytest.mark.asyncio
     async def test_decommissioned_intent_without_bindings_passes(self):
         """A retired intent with no bindings left cannot have orphaned rules."""
-        check = OrphanedRulesCheck()
+        check = _make_check()
         await check.validate(_data([_make_intent(bindings=[])]))
         assert not check.errors
 
     @pytest.mark.asyncio
     async def test_rule_outliving_intent_is_flagged(self):
         """The core violation: rule still deployed, intent decommissioned."""
-        check = OrphanedRulesCheck()
+        check = _make_check()
         await check.validate(_data([_make_intent()]))
         assert len(check.errors) == 1
 
     @pytest.mark.asyncio
     async def test_violation_names_rule_device_and_intent(self):
         """The report must identify what to remove and where it lives."""
-        check = OrphanedRulesCheck()
+        check = _make_check()
         await check.validate(_data([_make_intent()]))
         message = str(check.errors[0])
         assert "permit-legacy-5432" in message
@@ -121,14 +132,14 @@ class TestOrphanedRulesCheck:
     @pytest.mark.asyncio
     async def test_violation_reports_retirement_date(self):
         """How long a rule has lingered is what makes it an audit finding."""
-        check = OrphanedRulesCheck()
+        check = _make_check()
         await check.validate(_data([_make_intent()]))
         assert "2026-06-15" in str(check.errors[0])
 
     @pytest.mark.asyncio
     async def test_violation_anchors_to_the_rule_object(self):
         """Errors must anchor to the rule, since that is what gets deleted."""
-        check = OrphanedRulesCheck()
+        check = _make_check()
         await check.validate(_data([_make_intent()]))
         assert check.errors[0]["object_type"] == "FirewallRuleSet"
         assert check.errors[0]["object_id"] == _make_rule()["node"]["id"]
@@ -136,7 +147,7 @@ class TestOrphanedRulesCheck:
     @pytest.mark.asyncio
     async def test_every_orphaned_rule_is_reported_separately(self):
         """Two rules under one binding are two findings, not one."""
-        check = OrphanedRulesCheck()
+        check = _make_check()
         rules = [
             _make_rule(name="legacy-permit-a", rule_name="permit-a"),
             _make_rule(name="legacy-permit-b", rule_name="permit-b"),
@@ -150,7 +161,7 @@ class TestOrphanedRulesCheck:
     @pytest.mark.asyncio
     async def test_orphans_across_multiple_bindings_are_reported(self):
         """One intent realised on two devices leaves an orphan on each."""
-        check = OrphanedRulesCheck()
+        check = _make_check()
         bindings = [
             _make_binding(name="legacy-leaf01", device="leaf01"),
             _make_binding(name="legacy-leaf02", device="leaf02"),
@@ -164,7 +175,7 @@ class TestOrphanedRulesCheck:
     @pytest.mark.asyncio
     async def test_deny_rules_are_orphans_too(self):
         """A stale deny is still drift — the check is not permit-only."""
-        check = OrphanedRulesCheck()
+        check = _make_check()
         rules = [_make_rule(action="deny", rule_name="deny-legacy-5432")]
         await check.validate(_data([_make_intent(bindings=[_make_binding(rules=rules)])]))
         assert len(check.errors) == 1
@@ -173,7 +184,7 @@ class TestOrphanedRulesCheck:
     @pytest.mark.asyncio
     async def test_missing_retirement_date_still_flags_the_rule(self):
         """A null decommissioned_at must not suppress the violation."""
-        check = OrphanedRulesCheck()
+        check = _make_check()
         await check.validate(_data([_make_intent(decommissioned_at=None)]))
         assert len(check.errors) == 1
         assert "permit-legacy-5432" in str(check.errors[0])
@@ -181,7 +192,7 @@ class TestOrphanedRulesCheck:
     @pytest.mark.asyncio
     async def test_missing_device_still_flags_the_rule(self):
         """A binding with no resolvable device is reported, not skipped."""
-        check = OrphanedRulesCheck()
+        check = _make_check()
         binding = _make_binding()
         binding["node"]["device"] = {"node": None}
         await check.validate(_data([_make_intent(bindings=[binding])]))
@@ -191,7 +202,7 @@ class TestOrphanedRulesCheck:
     @pytest.mark.asyncio
     async def test_clean_fabric_logs_an_explicit_pass(self):
         """An empty result must read as 'verified clean', not 'did not run'."""
-        check = OrphanedRulesCheck()
+        check = _make_check()
         await check.validate(_data([]))
         assert check.logs
         assert "no decommissioned" in str(check.logs[0]["message"]).lower()
@@ -199,6 +210,6 @@ class TestOrphanedRulesCheck:
     @pytest.mark.asyncio
     async def test_owner_is_reported_for_remediation(self):
         """Findings route to a team, so the owner belongs in the message."""
-        check = OrphanedRulesCheck()
+        check = _make_check()
         await check.validate(_data([_make_intent()]))
         assert "risk-reporting-team" in str(check.errors[0])
