@@ -34,7 +34,7 @@ class TestSchemaLoading:
 
     def test_schema_load_is_idempotent(self, infrahub_url):
         """Loading schemas a second time succeeds without errors."""
-        script = BACKEND_ROOT / "network_synapse" / "scripts" / "load_schemas.py"
+        script = BACKEND_ROOT / "network_synapse" / "schemas" / "load_schemas.py"
         if not script.exists():
             pytest.skip("load_schemas.py not found")
 

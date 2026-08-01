@@ -239,6 +239,37 @@ The Infrahub stack consists of 7 containers:
 The default admin API token (`06438eb2-8019-4776-878c-0941b1f1d1ec`) is pre-configured.
 No manual token creation via the UI is needed.
 
+#### This stack is not shared with other projects
+
+Every container above belongs to the `synapse-quattro` compose project and this
+repo owns the ports listed. If you also run another Infrahub-based project on
+this machine (for example `snapl`, which maps its stack into the `18xxx` range),
+the two are **separate instances with separate schemas** — never point this
+repo's tooling at the other one.
+
+Two consequences worth knowing before debugging:
+
+- `INFRAHUB_URL` in `.env` must stay on **this** project's port (`8000`). Aiming
+  it at another project's Infrahub produces schema errors that look like seed-data
+  bugs but are not — a mandatory field this repo has never defined, for instance.
+- `docker ps` alone cannot tell the stacks apart, because both run the same
+  `opsmill/infrahub` image. Filter by compose project instead:
+
+```bash
+# Only this repo's containers
+docker compose -f development/docker-compose-deps.yml ps
+
+# Or, across all running containers
+docker ps --format '{{.Names}}\t{{.Label "com.docker.compose.project"}}'
+```
+
+Bring up only the Infrahub half of the dependency stack — enough for the
+integration tests, without Temporal, Grafana, Prometheus, and the collectors:
+
+```bash
+docker compose -f development/docker-compose-deps.yml up -d infrahub-server
+```
+
 ```bash
 # Check Infrahub container status
 docker ps --filter "name=infrahub"
