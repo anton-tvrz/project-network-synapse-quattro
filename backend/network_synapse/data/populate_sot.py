@@ -666,6 +666,175 @@ def populate_ip_prefixes(
 # ---------------------------------------------------------------------------
 
 
+def load_business_intent_seed(path: str | None = None) -> dict:
+    """Load the business intent seed, or return empty if it is absent.
+
+    Kept separate from seed_data.yml: the business intent chain is a demo
+    narrative, not fabric inventory, and someone seeding a bare lab should
+    not be forced to take the example trading application with it.
+    """
+    default = get_project_root() / "backend" / "network_synapse" / "data" / "business_intent.yml"
+    seed_file = Path(path) if path else default
+    if not seed_file.exists():
+        print(f"  ⏭️  No business intent seed at {seed_file} — skipped")
+        return {}
+    with seed_file.open() as handle:
+        return yaml.safe_load(handle) or {}
+
+
+def _optional_fields(source: dict, data: dict, fields: tuple[str, ...]) -> None:
+    """Copy present, non-empty ``fields`` from seed entry into mutation data."""
+    for field in fields:
+        if source.get(field):
+            data[field] = {"value": source[field]}
+
+
+def _seed_services(client: httpx.Client, base_url: str, seed: dict) -> dict[str, str]:
+    """ApplicationService objects, keyed by name."""
+    ids: dict[str, str] = {}
+    for service in seed.get("application_services", []):
+        data = {
+            "name": {"value": service["name"]},
+            "owner": {"value": service["owner"]},
+            "environment": {"value": service.get("environment", "development")},
+            "criticality": {"value": service.get("criticality", "P4")},
+        }
+        _optional_fields(service, data, ("description", "origin"))
+        ids[service["name"]] = get_or_create(client, base_url, "ApplicationService", "name", service["name"], data)
+    return ids
+
+
+def _seed_endpoints(client: httpx.Client, base_url: str, seed: dict, service_ids: dict[str, str]) -> dict[str, str]:
+    """ServiceEndpoint objects, keyed by name."""
+    ids: dict[str, str] = {}
+    for endpoint in seed.get("service_endpoints", []):
+        data = {
+            "name": {"value": endpoint["name"]},
+            "protocol": {"value": endpoint.get("protocol", "tcp")},
+            "direction": {"value": endpoint.get("direction", "inbound")},
+            "service": {"id": service_ids[endpoint["service"]]},
+        }
+        # ICMP has no port; the schema leaves it optional for exactly this.
+        if endpoint.get("port") is not None:
+            data["port"] = {"value": endpoint["port"]}
+        _optional_fields(endpoint, data, ("origin",))
+        ids[endpoint["name"]] = get_or_create(client, base_url, "ServiceEndpoint", "name", endpoint["name"], data)
+    return ids
+
+
+def _seed_intents(client: httpx.Client, base_url: str, seed: dict, endpoint_ids: dict[str, str]) -> dict[str, str]:
+    """ConnectivityIntent objects, keyed by name."""
+    ids: dict[str, str] = {}
+    for intent in seed.get("connectivity_intents", []):
+        data = {
+            "name": {"value": intent["name"]},
+            "status": {"value": intent.get("status", "requested")},
+            "justification": {"value": intent["justification"]},
+            "source_endpoint": {"id": endpoint_ids[intent["source_endpoint"]]},
+            "destination_endpoint": {"id": endpoint_ids[intent["destination_endpoint"]]},
+        }
+        _optional_fields(intent, data, ("decommissioned_at", "owner", "origin"))
+        ids[intent["name"]] = get_or_create(client, base_url, "ConnectivityIntent", "name", intent["name"], data)
+    return ids
+
+
+def _seed_bindings(
+    client: httpx.Client,
+    base_url: str,
+    seed: dict,
+    intent_ids: dict[str, str],
+    device_ids: dict[str, str],
+) -> dict[str, str]:
+    """InfrastructureBinding objects, keyed by name.
+
+    Bindings for devices absent from ``device_ids`` are skipped rather than
+    raising: the lab's firewall node is not yet modelled in the SoT (#186),
+    and one unmodelled device should not fail the whole seed.
+    """
+    ids: dict[str, str] = {}
+    for binding in seed.get("infrastructure_bindings", []):
+        device_id = device_ids.get(binding["device"])
+        if device_id is None:
+            print(f"  ⏭️  {binding['name']}: device {binding['device']} not in SoT — skipped (#186)")
+            continue
+        data = {
+            "name": {"value": binding["name"]},
+            "binding_type": {"value": binding.get("binding_type", "firewall_rule")},
+            "intent": {"id": intent_ids[binding["intent"]]},
+            "device": {"id": device_id},
+        }
+        _optional_fields(binding, data, ("origin",))
+        ids[binding["name"]] = get_or_create(client, base_url, "InfrastructureBinding", "name", binding["name"], data)
+    return ids
+
+
+def _seed_rule_sets(client: httpx.Client, base_url: str, seed: dict, binding_ids: dict[str, str]) -> int:
+    """FirewallRuleSet objects; returns how many were created."""
+    created = 0
+    for rule in seed.get("firewall_rule_sets", []):
+        binding_id = binding_ids.get(rule["binding"])
+        if binding_id is None:
+            print(f"  ⏭️  {rule['name']}: binding {rule['binding']} was skipped — skipped too")
+            continue
+        data = {
+            "name": {"value": rule["name"]},
+            "rule_name": {"value": rule["rule_name"]},
+            "sequence": {"value": rule.get("sequence", 100)},
+            "action": {"value": rule.get("action", "deny")},
+            "source_network": {"value": rule["source_network"]},
+            "destination_network": {"value": rule["destination_network"]},
+            "service_ports": {"value": str(rule["service_ports"])},
+            "binding": {"id": binding_id},
+        }
+        _optional_fields(rule, data, ("origin",))
+        get_or_create(client, base_url, "FirewallRuleSet", "name", rule["name"], data)
+        created += 1
+    return created
+
+
+def populate_business_intent(
+    client: httpx.Client,
+    base_url: str,
+    seed: dict,
+    device_ids: dict[str, str],
+) -> dict[str, int]:
+    """Create the business intent chain (#41): services -> ... -> rules.
+
+    Strictly ordered — each object references the one before it, so a binding
+    cannot be created before its intent exists. Returns per-kind counts.
+
+    Bindings for devices absent from ``device_ids`` are skipped rather than
+    raising: the lab's firewall node is not yet modelled in the SoT (#186),
+    and one unmodelled device should not fail the whole seed.
+    """
+    counts = {"services": 0, "endpoints": 0, "intents": 0, "bindings": 0, "rules": 0}
+    if not any(
+        seed.get(section)
+        for section in (
+            "application_services",
+            "service_endpoints",
+            "connectivity_intents",
+            "infrastructure_bindings",
+            "firewall_rule_sets",
+        )
+    ):
+        return counts
+
+    service_ids = _seed_services(client, base_url, seed)
+    endpoint_ids = _seed_endpoints(client, base_url, seed, service_ids)
+    intent_ids = _seed_intents(client, base_url, seed, endpoint_ids)
+    binding_ids = _seed_bindings(client, base_url, seed, intent_ids, device_ids)
+    rule_count = _seed_rule_sets(client, base_url, seed, binding_ids)
+
+    return {
+        "services": len(service_ids),
+        "endpoints": len(endpoint_ids),
+        "intents": len(intent_ids),
+        "bindings": len(binding_ids),
+        "rules": rule_count,
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description="Populate Infrahub with seed data")
     parser.add_argument(
@@ -698,6 +867,11 @@ def main():
         default=None,
         help="Path to pool definitions YAML file (default: data/pool_definitions.yml)",
     )
+    parser.add_argument(
+        "--business-intent-file",
+        default=None,
+        help="Path to business intent seed YAML (default: data/business_intent.yml)",
+    )
     args = parser.parse_args()
 
     project_root = get_project_root()
@@ -714,6 +888,9 @@ def main():
 
     with seed_file.open() as f:
         seed = yaml.safe_load(f)
+
+    intent_counts: dict[str, int] = {}
+    pool_counts: dict[str, int] | None = None
 
     # Load pool definitions if --with-pools is set
     pool_defs = None
@@ -819,6 +996,12 @@ def main():
             print("\n🏊  Creating number pools...")
             number_pool_ids = populate_number_pools(client, args.url, pool_defs)
 
+            pool_counts = {
+                "prefix": len(ip_prefix_pool_ids),
+                "address": len(ip_address_pool_ids),
+                "number": len(number_pool_ids),
+            }
+
         print("\n🔟  Creating IP addresses...")
         ip_ids = populate_ip_addresses(client, args.url, seed, namespace_id)
 
@@ -842,6 +1025,23 @@ def main():
             vrf_ids,
         )
 
+        print("\n1️⃣3️⃣  Creating business intent chain...")
+        intent_seed = load_business_intent_seed(args.business_intent_file)
+        intent_counts = populate_business_intent(client, args.url, intent_seed, device_ids)
+
+    _print_summary(seed, device_ids, iface_ids, ip_ids, prefix_ids, pool_counts, intent_counts)
+
+
+def _print_summary(
+    seed: dict,
+    device_ids: dict,
+    iface_ids: dict,
+    ip_ids: dict,
+    prefix_ids: dict,
+    pool_counts: dict[str, int] | None,
+    intent_counts: dict[str, int],
+) -> None:
+    """Report what was created, including the optional pool and intent sections."""
     print("\n" + "=" * 60)
     print("🏁 Seed data population complete!")
     print(f"   Devices: {len(device_ids)}")
@@ -849,10 +1049,16 @@ def main():
     print(f"   IP Addresses: {len(ip_ids)}")
     print(f"   Prefixes: {len(prefix_ids)}")
     print(f"   BGP Sessions: {len(seed.get('bgp_sessions', []))}")
-    if pool_defs:
-        print(f"   IP Prefix Pools: {len(ip_prefix_pool_ids)}")
-        print(f"   IP Address Pools: {len(ip_address_pool_ids)}")
-        print(f"   Number Pools: {len(number_pool_ids)}")
+    if pool_counts:
+        print(f"   IP Prefix Pools: {pool_counts['prefix']}")
+        print(f"   IP Address Pools: {pool_counts['address']}")
+        print(f"   Number Pools: {pool_counts['number']}")
+    if intent_counts.get("services"):
+        print(
+            f"   Business intent: {intent_counts['services']} services, "
+            f"{intent_counts['endpoints']} endpoints, {intent_counts['intents']} intents, "
+            f"{intent_counts['bindings']} bindings, {intent_counts['rules']} rules"
+        )
 
 
 if __name__ == "__main__":
