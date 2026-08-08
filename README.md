@@ -99,7 +99,23 @@ uv run invoke presentation.start
 
 ## Platform Management
 
-The platform is designed to be brought up and down cleanly using the `invoke` tasks:
+### One command
+
+```bash
+uv run invoke demo.up       # start the stack, wait until it's actually ready, load schemas, seed, deploy the lab
+uv run invoke demo.status   # go/no-go readiness check; non-zero exit if anything is down
+uv run invoke demo.reset    # destroy the lab and wipe all state for a clean re-run (destructive)
+```
+
+`demo.up` exists because `dev.deps` returns as soon as Docker has *started*
+the containers, while Infrahub needs a further 60-90s before it will accept a
+schema load. It polls `/api/schema/summary` and refuses to continue into a
+cold stack, rather than failing later with an error that says nothing about
+the cause.
+
+### Step by step
+
+The individual `invoke` tasks remain available:
 
 ### 🟢 Starting Up
 1. `uv run invoke dev.deps` (Starts Infrahub, Temporal, Telemetry)

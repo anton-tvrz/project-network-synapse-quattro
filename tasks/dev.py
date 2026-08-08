@@ -90,12 +90,18 @@ def deps_stop(ctx: Context) -> None:
 # ---------------------------------------------------------------------------
 
 
-@task
-def lab_deploy(ctx: Context) -> None:
-    """Deploy Containerlab topology."""
+@task(help={"reconfigure": "Recreate nodes that already exist instead of aborting."})
+def lab_deploy(ctx: Context, reconfigure: bool = False) -> None:
+    """Deploy Containerlab topology.
+
+    Containerlab refuses to deploy over existing containers. ``--reconfigure``
+    removes and recreates them, which is safe here: the lab holds no source of
+    truth — its config is regenerated from Infrahub by the pipeline.
+    """
     quoted_root = shlex.quote(str(PROJECT_ROOT))
     topo = f"{quoted_root}/containerlab/topology.clab.yml"
-    execute_command(ctx, _clab_docker_cmd(quoted_root, f"containerlab deploy --topo {topo}"))
+    flags = " --reconfigure" if reconfigure else ""
+    execute_command(ctx, _clab_docker_cmd(quoted_root, f"containerlab deploy --topo {topo}{flags}"))
 
 
 @task

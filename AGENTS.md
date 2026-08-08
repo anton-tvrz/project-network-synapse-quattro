@@ -99,6 +99,11 @@ uv run invoke workers.start             # Start Temporal worker
 # Presentation
 uv run invoke presentation.start        # Start the self-service portal (8081)
 
+# Demo / full-stack bring-up
+uv run invoke demo.up                   # Start everything, gated on readiness
+uv run invoke demo.status               # Readiness check (non-zero exit if down)
+uv run invoke demo.reset                # Wipe all state for a clean re-run (destructive)
+
 # Infrastructure
 uv run invoke dev.deps                  # Start infrastructure dependencies
 uv run invoke dev.deps-stop             # Stop infrastructure dependencies

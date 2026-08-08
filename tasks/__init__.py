@@ -9,7 +9,12 @@ Usage:
 
 from invoke import Collection
 
-from . import backend, collector, dev, docs, main, presentation, workers
+from . import backend, collector, demo, dev, docs, main, presentation, workers
+from .shared import load_env_file
+
+# Load .env before any task runs, so tasks see the repo's configured values
+# rather than whatever happens to be exported in the caller's shell (#189).
+load_env_file()
 
 ns = Collection()
 
@@ -25,4 +30,5 @@ ns.add_collection(Collection.from_module(collector), name="collector")
 ns.add_collection(Collection.from_module(workers), name="workers")
 ns.add_collection(Collection.from_module(presentation), name="presentation")
 ns.add_collection(Collection.from_module(dev), name="dev")
+ns.add_collection(Collection.from_module(demo), name="demo")
 ns.add_collection(Collection.from_module(docs), name="docs")
