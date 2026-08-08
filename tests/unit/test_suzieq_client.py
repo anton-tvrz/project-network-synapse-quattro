@@ -63,6 +63,54 @@ class TestAssertTable:
             client.assert_table("bgp")
 
 
+class TestShowTable:
+    def test_gets_show_endpoint_with_token_and_namespace(self) -> None:
+        response = MagicMock(status_code=200)
+        response.json.return_value = [{"hostname": "spine01", "state": "Established"}]
+        with (
+            patch.object(sc.httpx.Client, "get", return_value=response) as mock_get,
+            SuzieqClient(url="http://suzieq:8530", token="tok", namespace="ns") as client,
+        ):
+            rows = client.show_table("bgp")
+
+        assert rows == [{"hostname": "spine01", "state": "Established"}]
+        assert mock_get.call_args.args[0] == "http://suzieq:8530/api/v2/bgp/show"
+        params = mock_get.call_args.kwargs["params"]
+        assert params["access_token"] == "tok"
+        assert params["namespace"] == "ns"
+
+    def test_extra_filters_are_passed_as_query_params(self) -> None:
+        response = MagicMock(status_code=200)
+        response.json.return_value = []
+        with (
+            patch.object(sc.httpx.Client, "get", return_value=response) as mock_get,
+            SuzieqClient(url="http://suzieq:8530", token="t", namespace="n") as client,
+        ):
+            client.show_table("interface", hostname="leaf01", ifname="ethernet-1/1")
+        params = mock_get.call_args.kwargs["params"]
+        assert params["hostname"] == "leaf01"
+        assert params["ifname"] == "ethernet-1/1"
+
+    def test_none_filters_are_omitted(self) -> None:
+        response = MagicMock(status_code=200)
+        response.json.return_value = []
+        with (
+            patch.object(sc.httpx.Client, "get", return_value=response) as mock_get,
+            SuzieqClient(url="http://suzieq:8530", token="t", namespace="n") as client,
+        ):
+            client.show_table("bgp", hostname="leaf01", vrf=None)
+        assert "vrf" not in mock_get.call_args.kwargs["params"]
+
+    def test_non_2xx_response_raises_runtime_error(self) -> None:
+        response = MagicMock(status_code=500, text="boom")
+        with (
+            patch.object(sc.httpx.Client, "get", return_value=response),
+            SuzieqClient(url="http://suzieq:8530", token="t", namespace="n") as client,
+            pytest.raises(RuntimeError, match="500"),
+        ):
+            client.show_table("bgp")
+
+
 class TestFromEnv:
     def test_reads_configuration_from_environment(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("SUZIEQ_REST_URL", "http://host:9999")

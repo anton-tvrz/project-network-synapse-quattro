@@ -171,3 +171,50 @@ class TestUpdateOverrideStatus:
             asyncio.run(oa.update_override_status("leaf01-drain", "reverted"))
 
         client.close.assert_called_once()
+
+
+@pytest.mark.unit
+class TestValidateOverrideState:
+    """validate_override_state corroborates the override via SuzieQ, not the device."""
+
+    @staticmethod
+    def _suzieq_client(bgp_rows: list[dict], interface_rows: list[dict]) -> MagicMock:
+        client = MagicMock()
+        client.__enter__ = MagicMock(return_value=client)
+        client.__exit__ = MagicMock(return_value=None)
+        client.show_table.side_effect = lambda table, **_kw: {
+            "bgp": bgp_rows,
+            "interface": interface_rows,
+        }[table]
+        return client
+
+    def test_consistent_verdict_sets_gauge_one_and_returns_dict(self) -> None:
+        client = self._suzieq_client(
+            bgp_rows=[{"hostname": "leaf01", "peer": "10.0.0.1", "state": "NotEstd"}],
+            interface_rows=[],
+        )
+        with patch.object(oa, "SuzieqClient") as mock_cls:
+            mock_cls.from_env.return_value = client
+            result = asyncio.run(oa.validate_override_state("leaf01", "admin_shutdown", ["10.0.0.1"], []))
+
+        assert result["consistent"] is True
+        assert result["device"] == "leaf01"
+        assert _sample("override_state_validation_result", {"device": "leaf01"}) == 1
+        client.show_table.assert_any_call("bgp", hostname="leaf01")
+        client.show_table.assert_any_call("interface", hostname="leaf01")
+
+    def test_inconsistent_verdict_sets_gauge_zero_without_raising(self) -> None:
+        """A non-target session down is unexplained — inconsistent, but not an activity error."""
+        client = self._suzieq_client(
+            bgp_rows=[
+                {"hostname": "leaf01", "peer": "10.0.0.1", "state": "NotEstd"},
+                {"hostname": "leaf01", "peer": "10.0.0.2", "state": "NotEstd"},
+            ],
+            interface_rows=[],
+        )
+        with patch.object(oa, "SuzieqClient") as mock_cls:
+            mock_cls.from_env.return_value = client
+            result = asyncio.run(oa.validate_override_state("leaf01", "admin_shutdown", ["10.0.0.1"], []))
+
+        assert result["consistent"] is False
+        assert _sample("override_state_validation_result", {"device": "leaf01"}) == 0

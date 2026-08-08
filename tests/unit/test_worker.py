@@ -96,4 +96,5 @@ async def test_main_registers_all_workflows_and_activities() -> None:
             "check_reversion_safety",
             "update_override_status",
             "record_override_extension",
+            "validate_override_state",
         }

@@ -141,6 +141,39 @@ suzieq_drift_score > 0
 suzieq_drift_score_aggregate
 ```
 
+### Override-aware validation (Issue #64)
+
+During an operational override (`OperationalOverride`, Issue #161) some
+objects are *intentionally* down — the sanctioned deviation. Validating a
+device against plain SoT intent would flag that deviation as a fault, so the
+override workflow needs an **override-aware** check. SuzieQ provides it as an
+*independent* observer — the verdict corroborates the override from a second
+source, not the device's own gNMI answer.
+
+- `backend/network_synapse/collector/override_validation.py` — pure logic:
+  given an override's type and targeted objects plus SuzieQ `bgp show` /
+  `interface show` rows, it classifies each object:
+
+  | Verdict | Meaning |
+  |---------|---------|
+  | `consistent` | Observed state matches the override-aware expectation |
+  | `override_ineffective` | Targeted object still up — the sanctioned change never took effect |
+  | `unexpected_down` | Non-target object down — collateral the override can't explain |
+
+  A targeted object is expected **down** for `admin_shutdown`,
+  `maintenance_mode`, and `traffic_drain`; `emergency_bypass` expects its
+  target to stay up. Everything untargeted is expected healthy.
+
+- `validate_override_state` (Temporal activity, `override_activities.py`) —
+  reads device-scoped state via the SuzieQ client's `show_table`, runs the
+  validator, records the per-device `override_state_validation_result` gauge,
+  and returns the serialized result. It never raises on an inconsistent
+  verdict — that is a decision input for the workflow.
+
+This is additive: the existing gNMI-based `check_reversion_safety` is
+unchanged; wiring the SuzieQ verdict into the override workflow's revert
+decision is a follow-on.
+
 ## Syslog ingestion (Alloy → Loki)
 
 SR Linux forwards syslog to the collector; Grafana Alloy listens on host
